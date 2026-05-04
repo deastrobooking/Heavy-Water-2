@@ -1,0 +1,32 @@
+[package]
+name = "detroit-3026"
+version = "0.1.0"
+edition = "2021"
+description = "Detroit 3026 – Open World Action RPG (Bevy Engine)"
+
+[[bin]]
+name = "detroit-3026"
+path = "src/main.rs"
+
+[dependencies]
+bevy = "0.15"
+# bevy_rapier3d compatibility: 0.27 targets bevy 0.15; update if needed
+bevy_rapier3d = { version = "0.27", features = ["dim3"] }
+rand = "0.8"
+noise = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+[features]
+# Use dynamic linking for faster incremental dev builds:  cargo run --features dynamic
+dynamic = ["bevy/dynamic_linking"]
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

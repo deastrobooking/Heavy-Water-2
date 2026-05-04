@@ -1,0 +1,19 @@
+pub mod player_plugin;
+pub mod weapon_plugin;
+pub mod enemy_plugin;
+pub mod world_plugin;
+pub mod chest_plugin;
+pub mod companion_plugin;
+pub mod armor_plugin;
+pub mod crafting_plugin;
+pub mod ui_plugin;
+
+pub use player_plugin::PlayerPlugin;
+pub use weapon_plugin::WeaponPlugin;
+pub use enemy_plugin::EnemyPlugin;
+pub use world_plugin::WorldPlugin;
+pub use chest_plugin::ChestPlugin;
+pub use companion_plugin::CompanionPlugin;
+pub use armor_plugin::ArmorPlugin;
+pub use crafting_plugin::CraftingPlugin;
+pub use ui_plugin::UiPlugin;

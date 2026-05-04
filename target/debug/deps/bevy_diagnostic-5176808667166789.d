@@ -1,0 +1,9 @@
+/Users/home/Desktop/Games/Heavy-Water-2/target/debug/deps/bevy_diagnostic-5176808667166789.d: /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/lib.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/diagnostic.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/entity_count_diagnostics_plugin.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/frame_time_diagnostics_plugin.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/log_diagnostics_plugin.rs
+
+/Users/home/Desktop/Games/Heavy-Water-2/target/debug/deps/libbevy_diagnostic-5176808667166789.rmeta: /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/lib.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/diagnostic.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/entity_count_diagnostics_plugin.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/frame_time_diagnostics_plugin.rs /Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/log_diagnostics_plugin.rs
+
+/Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/lib.rs:
+/Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/diagnostic.rs:
+/Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/entity_count_diagnostics_plugin.rs:
+/Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/frame_time_diagnostics_plugin.rs:
+/Users/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_diagnostic-0.14.2/src/log_diagnostics_plugin.rs:

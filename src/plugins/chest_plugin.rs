@@ -1,0 +1,118 @@
+use bevy::prelude::*;
+use rand::Rng;
+
+use crate::state::AppState;
+use crate::events::{ChestOpenedEvent, LootCollectedEvent};
+use crate::components::player::{Player, PlayerStats};
+use crate::components::world::{Chest, LootType};
+use crate::damage::Health;
+use crate::resources::PlayerScore;
+
+// ── Plugin ────────────────────────────────────────────────────────────────────
+pub struct ChestPlugin;
+
+impl Plugin for ChestPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_systems(OnEnter(AppState::Playing), spawn_chests)
+            .add_systems(
+                Update,
+                chest_proximity_system.run_if(in_state(AppState::Playing)),
+            );
+    }
+}
+
+fn spawn_chests(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    let mut rng = rand::thread_rng();
+    let gold_mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.9, 0.7, 0.1),
+        metallic: 0.8,
+        perceptual_roughness: 0.2,
+        emissive: LinearRgba::new(0.5, 0.35, 0.0, 1.0),
+        ..default()
+    });
+
+    for _ in 0..20 {
+        let x = rng.gen_range(-400.0f32..400.0);
+        let z = rng.gen_range(-300.0f32..300.0);
+
+        let loot_roll: f32 = rng.gen();
+        let (loot_type, amount) = if loot_roll < 0.35 {
+            (LootType::Credits, rng.gen_range(50..200u32))
+        } else if loot_roll < 0.55 {
+            (LootType::Health, rng.gen_range(25..75))
+        } else if loot_roll < 0.70 {
+            (LootType::Armor, rng.gen_range(20..60))
+        } else if loot_roll < 0.90 {
+            (LootType::Ammo, rng.gen_range(20..50))
+        } else {
+            (LootType::WeaponUpgrade, 1)
+        };
+
+        commands.spawn((
+            PbrBundle {
+                mesh: meshes.add(Cuboid::new(1.5, 1.2, 1.5)),
+                material: gold_mat.clone(),
+                transform: Transform::from_xyz(x, 0.6, z),
+                ..default()
+            },
+            Chest::new(loot_type, amount),
+            PointLight {
+                color: Color::srgb(1.0, 0.85, 0.2),
+                intensity: 5_000.0,
+                range: 8.0,
+                ..default()
+            },
+        ));
+    }
+}
+
+fn chest_proximity_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    player_q: Query<(&Transform, &mut PlayerStats), With<Player>>,
+    mut player_health_q: Query<&mut Health, With<Player>>,
+    mut chest_q: Query<(Entity, &Transform, &mut Chest)>,
+    mut loot_ev: EventWriter<LootCollectedEvent>,
+    mut chest_ev: EventWriter<ChestOpenedEvent>,
+    mut score: ResMut<PlayerScore>,
+) {
+    let Ok((pt, mut stats)) = player_q.get_single() else { return };
+    let player_pos = pt.translation;
+
+    for (entity, chest_transform, mut chest) in chest_q.iter_mut() {
+        if chest.is_open { continue; }
+
+        let dist = player_pos.distance(chest_transform.translation);
+        if dist > 2.0 { continue; }
+
+        // Open the chest
+        chest.is_open = true;
+        score.chests_opened += 1;
+        chest_ev.send(ChestOpenedEvent);
+
+        let amount = chest.loot_amount;
+        match chest.loot_type {
+            LootType::Credits => {
+                stats.credits += amount;
+            }
+            LootType::Health => {
+                if let Ok(mut h) = player_health_q.get_single_mut() {
+                    h.heal(amount as f32);
+                }
+            }
+            LootType::Armor => {
+                stats.armor = (stats.armor + amount as f32).min(stats.max_armor);
+            }
+            LootType::Ammo | LootType::WeaponUpgrade => {}
+        }
+
+        loot_ev.send(LootCollectedEvent {
+            loot_type: format!("{:?}", chest.loot_type),
+            amount,
+        });
+
+        // Despawn after short delay (simplified: despawn immediately)
+        commands.entity(entity).despawn_recursive();
+    }
+}

@@ -1,0 +1,7 @@
+(player::Player, bevy::prelude::Transform, bevy::prelude::GlobalTransform, bevy_rapier3d::dynamics::RigidBody, bevy_rapier3d::geometry::Collider, bevy_rapier3d::control::KinematicCharacterController, bevy_rapier3d::control::KinematicCharacterControllerOutput, player::PlayerStats, player::PlayerMovement, player::JetpackState, player::DodgeState, player::ParryState, player::PlayerStateMachine, Health, Damageable, armor::ArmorSet, Inventory, weapon::WeaponInventory, weapon::SpecialWeaponInventory, weapon::BeamSabre, weapon::MeleeCombo)
+bevy::bevy_core_pipeline::contrast_adaptive_sharpening::ContrastAdaptiveSharpening
+bloom::downsampling_pipeline::BloomDownsamplingPipelineIds
+core_pipeline::skybox::prepass::RenderSkyboxPrepassPipeline
+core_pipeline::skybox::prepass::SkyboxPrepassBindGroup
+pbr::volumetric_fog::render::ViewVolumetricFogPipelines
+sprite::texture_slice::computed_slices::ComputedTextureSlices

@@ -1,0 +1,1 @@
+bevy::prelude::Query<'_, '_, (&mut bevy_rapier3d::control::KinematicCharacterController, &bevy_rapier3d::control::KinematicCharacterControllerOutput, &mut player::PlayerMovement, &mut player::PlayerStats, &mut player::JetpackState, &mut player::DodgeState, &bevy::prelude::Transform, &mut player::PlayerStateMachine), bevy::prelude::With<player::Player>>
