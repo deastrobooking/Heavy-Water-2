@@ -117,7 +117,7 @@ fn crafting_queue_system(
     mut player_q: Query<&mut Inventory, With<Player>>,
     mut inv_ev: EventWriter<InventoryChangedEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok(mut inventory) = player_q.get_single_mut() else { return };
 
     let all = all_recipes();

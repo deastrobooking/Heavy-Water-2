@@ -8,7 +8,6 @@ use crate::components::armor::ArmorSet;
 use crate::damage::Health;
 use crate::resources::{WaveInfo, UiMessage};
 
-// ── Plugin ────────────────────────────────────────────────────────────────────
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
@@ -20,33 +19,21 @@ impl Plugin for UiPlugin {
             .add_systems(OnEnter(AppState::GameOver), setup_game_over)
             .add_systems(
                 Update,
-                (
-                    hud_update_system,
-                    message_timer_system,
-                    ui_message_listener,
-                    game_over_input,
-                )
-                    .run_if(in_state(AppState::Playing).or_else(in_state(AppState::GameOver))),
+                (hud_update_system, message_timer_system, ui_message_listener, game_over_input)
+                    .run_if(in_state(AppState::Playing).or(in_state(AppState::GameOver))),
             )
             .add_systems(Update, menu_start_button.run_if(in_state(AppState::MainMenu)));
     }
 }
 
-// ── UI Node Tags ──────────────────────────────────────────────────────────────
 #[derive(Component)] struct MainMenuRoot;
 #[derive(Component)] struct HudRoot;
 #[derive(Component)] struct GameOverRoot;
 #[derive(Component)] struct StartButton;
-#[derive(Component)] struct GameOverText;
-#[derive(Component)] struct MessageText;
-
-// Bar fill markers (Default required for spawn_bar_row generic)
 #[derive(Component, Default)] struct HealthBar;
 #[derive(Component, Default)] struct ArmorBar;
 #[derive(Component, Default)] struct StaminaBar;
 #[derive(Component, Default)] struct JetpackBar;
-
-// Text markers
 #[derive(Component)] struct CreditsText;
 #[derive(Component)] struct LevelText;
 #[derive(Component)] struct ElementBadge;
@@ -54,79 +41,44 @@ impl Plugin for UiPlugin {
 #[derive(Component)] struct WaveText;
 #[derive(Component)] struct WeaponNameText;
 #[derive(Component)] struct AmmoText;
+#[derive(Component)] struct MessageText;
 
 fn despawn_menu(mut commands: Commands, q: Query<Entity, With<MainMenuRoot>>) {
     for e in q.iter() { commands.entity(e).despawn_recursive(); }
 }
 
-// ── Main Menu ─────────────────────────────────────────────────────────────────
 fn setup_main_menu(mut commands: Commands) {
     commands.spawn((
-        NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            background_color: Color::srgba(0.01, 0.01, 0.05, 1.0).into(),
+        Node {
+            width: Val::Percent(100.0), height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center, justify_content: JustifyContent::Center,
             ..default()
         },
+        BackgroundColor(Color::srgba(0.01, 0.01, 0.05, 1.0)),
         MainMenuRoot,
-    )).with_children(|parent| {
-        // Title
-        parent.spawn(TextBundle::from_section(
-            "DETROIT 3026",
-            TextStyle {
-                font_size: 72.0,
-                color: Color::srgb(0.0, 0.8, 1.0),
-                ..default()
-            },
-        ));
-
-        parent.spawn(TextBundle::from_section(
-            "Open World Action RPG",
-            TextStyle {
-                font_size: 24.0,
-                color: Color::srgb(0.6, 0.6, 0.8),
-                ..default()
-            },
-        ));
-
-        // Spacer
-        parent.spawn(NodeBundle { style: Style { height: Val::Px(40.0), ..default() }, ..default() });
-
-        // Start button
-        parent.spawn((
-            ButtonBundle {
-                style: Style {
-                    padding: UiRect::all(Val::Px(16.0)),
-                    ..default()
-                },
-                background_color: Color::srgb(0.0, 0.4, 0.8).into(),
-                ..default()
-            },
+    )).with_children(|p| {
+        p.spawn((Text::new("DETROIT 3026"), TextFont { font_size: 72.0, ..default() }, TextColor(Color::srgb(0.0, 0.8, 1.0))));
+        p.spawn((Text::new("Open World Action RPG"), TextFont { font_size: 24.0, ..default() }, TextColor(Color::srgb(0.6, 0.6, 0.8))));
+        p.spawn(Node { height: Val::Px(40.0), ..default() });
+        p.spawn((
+            Button,
+            Node { padding: UiRect::all(Val::Px(16.0)), ..default() },
+            BackgroundColor(Color::srgb(0.0, 0.4, 0.8)),
             StartButton,
         )).with_children(|btn| {
-            btn.spawn(TextBundle::from_section(
-                "START MISSION",
-                TextStyle { font_size: 28.0, color: Color::WHITE, ..default() },
-            ));
+            btn.spawn((Text::new("START MISSION"), TextFont { font_size: 28.0, ..default() }, TextColor(Color::WHITE)));
         });
-
-        // Controls hint
-        parent.spawn(NodeBundle { style: Style { height: Val::Px(30.0), ..default() }, ..default() });
-        parent.spawn(TextBundle::from_section(
-            "WASD Move  •  Mouse Look  •  LMB Fire  •  V/B Melee  •  T Beam Sabre  •  F Parry  •  Q Dodge  •  Space Jump/Jetpack",
-            TextStyle { font_size: 14.0, color: Color::srgb(0.5, 0.5, 0.7), ..default() },
+        p.spawn(Node { height: Val::Px(30.0), ..default() });
+        p.spawn((
+            Text::new("WASD Move  |  Mouse Look  |  LMB Fire  |  V/B Melee  |  T Beam Sabre  |  F Parry  |  Q Dodge  |  Space Jump/Jetpack"),
+            TextFont { font_size: 14.0, ..default() }, TextColor(Color::srgb(0.5, 0.5, 0.7)),
         ));
     });
 }
 
 fn menu_start_button(
-    mut interaction_q: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
+    interaction_q: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     for interaction in interaction_q.iter() {
@@ -136,359 +88,157 @@ fn menu_start_button(
     }
 }
 
-// ── HUD Setup ─────────────────────────────────────────────────────────────────
 fn setup_hud(mut commands: Commands) {
     commands.spawn((
-        NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                position_type: PositionType::Absolute,
-                ..default()
-            },
-            ..default()
-        },
+        Node { width: Val::Percent(100.0), height: Val::Percent(100.0), position_type: PositionType::Absolute, ..default() },
         HudRoot,
     )).with_children(|root| {
-        // ── Top-Left: health/armor/stamina/jetpack/credits/level ──────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                left: Val::Px(16.0),
-                top: Val::Px(16.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(6.0),
-                width: Val::Px(220.0),
-                ..default()
-            },
+        // Top-left stats panel
+        root.spawn(Node {
+            position_type: PositionType::Absolute, left: Val::Px(16.0), top: Val::Px(16.0),
+            flex_direction: FlexDirection::Column, row_gap: Val::Px(6.0), width: Val::Px(220.0),
             ..default()
         }).with_children(|panel| {
-            spawn_bar_row(panel, "HP", HealthBar, Color::srgb(0.2, 0.8, 0.2));
-            spawn_bar_row(panel, "AR", ArmorBar, Color::srgb(0.2, 0.5, 1.0));
-            spawn_bar_row(panel, "ST", StaminaBar, Color::srgb(0.9, 0.7, 0.0));
-            spawn_bar_row(panel, "JP", JetpackBar, Color::srgb(0.0, 0.9, 0.9));
-
-            // Credits
-            panel.spawn((
-                TextBundle::from_section("¢ 0", TextStyle { font_size: 16.0, color: Color::srgb(0.9, 0.75, 0.1), ..default() }),
-                CreditsText,
-            ));
-
-            // Level
-            panel.spawn((
-                TextBundle::from_section("LVL 1", TextStyle { font_size: 16.0, color: Color::srgb(0.7, 0.4, 1.0), ..default() }),
-                LevelText,
-            ));
-
-            // Element
-            panel.spawn((
-                TextBundle::from_section("Element: None", TextStyle { font_size: 14.0, color: Color::srgb(0.7, 0.7, 0.9), ..default() }),
-                ElementBadge,
-            ));
+            spawn_bar(panel, "HP", HealthBar, Color::srgb(0.2, 0.8, 0.2));
+            spawn_bar(panel, "AR", ArmorBar, Color::srgb(0.2, 0.5, 1.0));
+            spawn_bar(panel, "ST", StaminaBar, Color::srgb(0.9, 0.7, 0.0));
+            spawn_bar(panel, "JP", JetpackBar, Color::srgb(0.0, 0.9, 0.9));
+            panel.spawn((Text::new("¢ 0"), TextFont { font_size: 16.0, ..default() }, TextColor(Color::srgb(0.9, 0.75, 0.1)), CreditsText));
+            panel.spawn((Text::new("LVL 1"), TextFont { font_size: 16.0, ..default() }, TextColor(Color::srgb(0.7, 0.4, 1.0)), LevelText));
+            panel.spawn((Text::new("Element: None"), TextFont { font_size: 14.0, ..default() }, TextColor(Color::srgb(0.7, 0.7, 0.9)), ElementBadge));
         });
 
-        // ── Top-Right: enemy count / wave ─────────────────────────────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                right: Val::Px(16.0),
-                top: Val::Px(16.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexEnd,
-                row_gap: Val::Px(6.0),
-                ..default()
-            },
+        // Top-right wave/enemy
+        root.spawn(Node {
+            position_type: PositionType::Absolute, right: Val::Px(16.0), top: Val::Px(16.0),
+            flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: Val::Px(6.0),
             ..default()
         }).with_children(|panel| {
-            panel.spawn((
-                TextBundle::from_section("Wave 1", TextStyle { font_size: 20.0, color: Color::srgb(1.0, 0.4, 0.2), ..default() }),
-                WaveText,
-            ));
-            panel.spawn((
-                TextBundle::from_section("Enemies: 0", TextStyle { font_size: 16.0, color: Color::srgb(1.0, 0.7, 0.3), ..default() }),
-                EnemyCountText,
-            ));
+            panel.spawn((Text::new("Wave 1"), TextFont { font_size: 20.0, ..default() }, TextColor(Color::srgb(1.0, 0.4, 0.2)), WaveText));
+            panel.spawn((Text::new("Enemies: 0"), TextFont { font_size: 16.0, ..default() }, TextColor(Color::srgb(1.0, 0.7, 0.3)), EnemyCountText));
         });
 
-        // ── Bottom-Left: weapon name / ammo ───────────────────────────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                left: Val::Px(16.0),
-                bottom: Val::Px(80.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(4.0),
-                ..default()
-            },
-            ..default()
+        // Bottom-left weapon
+        root.spawn(Node {
+            position_type: PositionType::Absolute, left: Val::Px(16.0), bottom: Val::Px(80.0),
+            flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default()
         }).with_children(|panel| {
-            panel.spawn((
-                TextBundle::from_section("Plasma Pistol", TextStyle { font_size: 22.0, color: Color::srgb(0.0, 0.8, 1.0), ..default() }),
-                WeaponNameText,
-            ));
-            panel.spawn((
-                TextBundle::from_section("50 / 50", TextStyle { font_size: 18.0, color: Color::srgb(0.8, 0.8, 0.8), ..default() }),
-                AmmoText,
-            ));
+            panel.spawn((Text::new("Plasma Pistol"), TextFont { font_size: 22.0, ..default() }, TextColor(Color::srgb(0.0, 0.8, 1.0)), WeaponNameText));
+            panel.spawn((Text::new("50 / 50"), TextFont { font_size: 18.0, ..default() }, TextColor(Color::srgb(0.8, 0.8, 0.8)), AmmoText));
         });
 
-        // ── Center: crosshair ─────────────────────────────────────────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: Val::Percent(50.0),
-                margin: UiRect::all(Val::Px(-8.0)),
-                width: Val::Px(16.0),
-                height: Val::Px(16.0),
-                ..default()
-            },
-            ..default()
+        // Crosshair
+        root.spawn(Node {
+            position_type: PositionType::Absolute, left: Val::Percent(50.0), top: Val::Percent(50.0),
+            margin: UiRect::all(Val::Px(-8.0)), width: Val::Px(16.0), height: Val::Px(16.0), ..default()
         }).with_children(|ch| {
-            // Horizontal line
-            ch.spawn(NodeBundle {
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(0.0),
-                    top: Val::Px(7.0),
-                    width: Val::Px(16.0),
-                    height: Val::Px(2.0),
-                    ..default()
-                },
-                background_color: Color::srgba(1.0, 1.0, 1.0, 0.8).into(),
-                ..default()
-            });
-            // Vertical line
-            ch.spawn(NodeBundle {
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(7.0),
-                    top: Val::Px(0.0),
-                    width: Val::Px(2.0),
-                    height: Val::Px(16.0),
-                    ..default()
-                },
-                background_color: Color::srgba(1.0, 1.0, 1.0, 0.8).into(),
-                ..default()
-            });
+            ch.spawn((Node { position_type: PositionType::Absolute, left: Val::Px(0.0), top: Val::Px(7.0), width: Val::Px(16.0), height: Val::Px(2.0), ..default() }, BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.8))));
+            ch.spawn((Node { position_type: PositionType::Absolute, left: Val::Px(7.0), top: Val::Px(0.0), width: Val::Px(2.0), height: Val::Px(16.0), ..default() }, BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.8))));
         });
 
-        // ── Upper-Center: message popup ────────────────────────────────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: Val::Px(80.0),
-                ..default()
-            },
-            ..default()
-        }).with_children(|msg| {
-            msg.spawn((
-                TextBundle::from_section("", TextStyle { font_size: 22.0, color: Color::srgb(1.0, 0.9, 0.3), ..default() }),
-                MessageText,
-            ));
-        });
+        // Message popup
+        root.spawn(Node { position_type: PositionType::Absolute, left: Val::Percent(50.0), top: Val::Px(80.0), ..default() })
+            .with_children(|msg| {
+                msg.spawn((Text::new(""), TextFont { font_size: 22.0, ..default() }, TextColor(Color::srgb(1.0, 0.9, 0.3)), MessageText));
+            });
 
-        // ── Weapon selector bar (bottom) ──────────────────────────────────────
-        root.spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(16.0),
-                left: Val::Percent(50.0),
-                column_gap: Val::Px(4.0),
-                flex_direction: FlexDirection::Row,
-                ..default()
-            },
-            ..default()
+        // Weapon selector bar (bottom center)
+        root.spawn(Node {
+            position_type: PositionType::Absolute, bottom: Val::Px(16.0), left: Val::Percent(50.0),
+            column_gap: Val::Px(4.0), flex_direction: FlexDirection::Row, ..default()
         }).with_children(|bar| {
-            let weapon_names = ["1:Pistol","2:Rifle","3:Shotgun","4:Rocket","5:Laser","6:Grenade"];
-            for (i, name) in weapon_names.iter().enumerate() {
-                bar.spawn(NodeBundle {
-                    style: Style {
-                        padding: UiRect::all(Val::Px(4.0)),
-                        width: Val::Px(80.0),
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    },
-                    background_color: Color::srgba(0.1, 0.1, 0.2, 0.7).into(),
-                    ..default()
-                }).with_children(|slot| {
-                    slot.spawn(TextBundle::from_section(
-                        *name,
-                        TextStyle { font_size: 11.0, color: Color::srgb(0.7, 0.8, 1.0), ..default() },
-                    ));
+            for name in &["1:Pistol","2:Rifle","3:Shotgun","4:Rocket","5:Laser","6:Grenade"] {
+                bar.spawn((
+                    Node { padding: UiRect::all(Val::Px(4.0)), width: Val::Px(80.0), justify_content: JustifyContent::Center, ..default() },
+                    BackgroundColor(Color::srgba(0.1, 0.1, 0.2, 0.7)),
+                )).with_children(|slot| {
+                    slot.spawn((Text::new(*name), TextFont { font_size: 11.0, ..default() }, TextColor(Color::srgb(0.7, 0.8, 1.0))));
                 });
             }
         });
     });
 }
 
-fn spawn_bar_row<L: Component + Default>(
-    parent: &mut ChildBuilder,
-    label: &str,
-    _bar_marker: L,
-    color: Color,
-) {
-    parent.spawn(NodeBundle {
-        style: Style {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: Val::Px(6.0),
-            ..default()
-        },
-        ..default()
-    }).with_children(|row| {
-        row.spawn(TextBundle::from_section(label, TextStyle { font_size: 14.0, color: Color::srgb(0.7, 0.7, 0.8), ..default() }));
-        // Bar background
-        row.spawn(NodeBundle {
-            style: Style { width: Val::Px(150.0), height: Val::Px(12.0), ..default() },
-            background_color: Color::srgba(0.1, 0.1, 0.1, 0.8).into(),
-            ..default()
-        }).with_children(|bg| {
-            bg.spawn((
-                NodeBundle {
-                    style: Style { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
-                    background_color: color.into(),
-                    ..default()
-                },
-                L::default(),
-            ));
+fn spawn_bar<L: Component + Default>(parent: &mut ChildBuilder, label: &str, _marker: L, color: Color) {
+    parent.spawn(Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: Val::Px(6.0), ..default() })
+        .with_children(|row| {
+            row.spawn((Text::new(label), TextFont { font_size: 14.0, ..default() }, TextColor(Color::srgb(0.7, 0.7, 0.8))));
+            row.spawn((
+                Node { width: Val::Px(150.0), height: Val::Px(12.0), ..default() },
+                BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.8)),
+            )).with_children(|bg| {
+                bg.spawn((
+                    Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+                    BackgroundColor(color),
+                    L::default(),
+                ));
+            });
         });
-    });
 }
 
-// ── HUD Update ────────────────────────────────────────────────────────────────
 fn hud_update_system(
-    player_q: Query<(&Health, &PlayerStats, &JetpackState, &WeaponInventory, &ArmorSet, &PlayerStateMachine), With<Player>>,
+    player_q: Query<(&Health, &PlayerStats, &JetpackState, &WeaponInventory, &ArmorSet), With<Player>>,
     wave: Res<WaveInfo>,
-    mut health_bar_q: Query<&mut Style, With<HealthBar>>,
-    mut armor_bar_q: Query<&mut Style, (With<ArmorBar>, Without<HealthBar>)>,
-    mut stamina_bar_q: Query<&mut Style, (With<StaminaBar>, Without<HealthBar>, Without<ArmorBar>)>,
-    mut jp_bar_q: Query<&mut Style, (With<JetpackBar>, Without<HealthBar>, Without<ArmorBar>, Without<StaminaBar>)>,
-    mut credits_q: Query<&mut Text, (With<CreditsText>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<LevelText>, Without<ElementBadge>)>,
-    mut level_q: Query<&mut Text, (With<LevelText>, Without<CreditsText>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<ElementBadge>)>,
-    mut element_q: Query<&mut Text, (With<ElementBadge>, Without<CreditsText>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<LevelText>)>,
-    mut wave_q: Query<&mut Text, (With<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<WeaponNameText>, Without<AmmoText>, Without<LevelText>, Without<ElementBadge>)>,
-    mut enemy_q: Query<&mut Text, (With<EnemyCountText>, Without<WaveText>, Without<CreditsText>, Without<WeaponNameText>, Without<AmmoText>, Without<LevelText>, Without<ElementBadge>)>,
-    mut weapon_name_q: Query<&mut Text, (With<WeaponNameText>, Without<AmmoText>, Without<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>)>,
-    mut ammo_q: Query<&mut Text, (With<AmmoText>, Without<WeaponNameText>, Without<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>)>,
+    mut hp_q: Query<&mut Node, (With<HealthBar>, Without<ArmorBar>, Without<StaminaBar>, Without<JetpackBar>)>,
+    mut ar_q: Query<&mut Node, (With<ArmorBar>, Without<HealthBar>, Without<StaminaBar>, Without<JetpackBar>)>,
+    mut st_q: Query<&mut Node, (With<StaminaBar>, Without<HealthBar>, Without<ArmorBar>, Without<JetpackBar>)>,
+    mut jp_q: Query<&mut Node, (With<JetpackBar>, Without<HealthBar>, Without<ArmorBar>, Without<StaminaBar>)>,
+    mut credits_q: Query<&mut Text, (With<CreditsText>, Without<LevelText>, Without<ElementBadge>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<MessageText>)>,
+    mut level_q: Query<&mut Text, (With<LevelText>, Without<CreditsText>, Without<ElementBadge>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<MessageText>)>,
+    mut elem_q: Query<&mut Text, (With<ElementBadge>, Without<CreditsText>, Without<LevelText>, Without<WaveText>, Without<EnemyCountText>, Without<WeaponNameText>, Without<AmmoText>, Without<MessageText>)>,
+    mut wave_q: Query<&mut Text, (With<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>, Without<WeaponNameText>, Without<AmmoText>, Without<MessageText>)>,
+    mut enm_q: Query<&mut Text, (With<EnemyCountText>, Without<WaveText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>, Without<WeaponNameText>, Without<AmmoText>, Without<MessageText>)>,
+    mut wname_q: Query<&mut Text, (With<WeaponNameText>, Without<AmmoText>, Without<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>, Without<MessageText>)>,
+    mut ammo_q: Query<&mut Text, (With<AmmoText>, Without<WeaponNameText>, Without<WaveText>, Without<EnemyCountText>, Without<CreditsText>, Without<LevelText>, Without<ElementBadge>, Without<MessageText>)>,
 ) {
-    let Ok((health, stats, jetpack, weapons, armor, _sm)) = player_q.get_single() else { return };
+    let Ok((health, stats, jetpack, weapons, armor)) = player_q.get_single() else { return };
 
-    // Health bar width
-    if let Ok(mut style) = health_bar_q.get_single_mut() {
-        style.width = Val::Percent((health.current / health.max * 100.0).clamp(0.0, 100.0));
-    }
-    // Armor bar
-    if let Ok(mut style) = armor_bar_q.get_single_mut() {
-        style.width = Val::Percent((stats.armor / stats.max_armor * 100.0).clamp(0.0, 100.0));
-    }
-    // Stamina bar
-    if let Ok(mut style) = stamina_bar_q.get_single_mut() {
-        style.width = Val::Percent((stats.stamina / stats.max_stamina * 100.0).clamp(0.0, 100.0));
-    }
-    // Jetpack bar
-    if let Ok(mut style) = jp_bar_q.get_single_mut() {
-        style.width = Val::Percent((jetpack.fuel / jetpack.max_fuel * 100.0).clamp(0.0, 100.0));
-    }
-    // Credits
-    if let Ok(mut text) = credits_q.get_single_mut() {
-        text.sections[0].value = format!("¢ {}", stats.credits);
-    }
-    // Level
-    if let Ok(mut text) = level_q.get_single_mut() {
-        let needed = stats.xp_for_next_level();
-        text.sections[0].value = format!("LVL {}  XP {}/{}", stats.level, stats.experience, needed);
-    }
-    // Element
-    if let Ok(mut text) = element_q.get_single_mut() {
-        text.sections[0].value = format!("Element: {}", armor.active_element.display_name());
-    }
-    // Wave
-    if let Ok(mut text) = wave_q.get_single_mut() {
-        text.sections[0].value = format!("Wave {}", wave.wave_number);
-    }
-    // Enemy count
-    if let Ok(mut text) = enemy_q.get_single_mut() {
-        text.sections[0].value = format!("Enemies: {}", wave.enemy_count);
-    }
-    // Weapon
+    if let Ok(mut n) = hp_q.get_single_mut() { n.width = Val::Percent((health.current / health.max * 100.0).clamp(0.0, 100.0)); }
+    if let Ok(mut n) = ar_q.get_single_mut() { n.width = Val::Percent((stats.armor / stats.max_armor * 100.0).clamp(0.0, 100.0)); }
+    if let Ok(mut n) = st_q.get_single_mut() { n.width = Val::Percent((stats.stamina / stats.max_stamina * 100.0).clamp(0.0, 100.0)); }
+    if let Ok(mut n) = jp_q.get_single_mut() { n.width = Val::Percent((jetpack.fuel / jetpack.max_fuel * 100.0).clamp(0.0, 100.0)); }
+
+    if let Ok(mut t) = credits_q.get_single_mut() { *t = Text::new(format!("¢ {}", stats.credits)); }
+    if let Ok(mut t) = level_q.get_single_mut() { *t = Text::new(format!("LVL {}  XP {}/{}", stats.level, stats.experience, stats.xp_for_next_level())); }
+    if let Ok(mut t) = elem_q.get_single_mut() { *t = Text::new(format!("Element: {}", armor.active_element.display_name())); }
+    if let Ok(mut t) = wave_q.get_single_mut() { *t = Text::new(format!("Wave {}", wave.wave_number)); }
+    if let Ok(mut t) = enm_q.get_single_mut() { *t = Text::new(format!("Enemies: {}", wave.enemy_count)); }
+
     let weapon = weapons.active();
-    if let Ok(mut text) = weapon_name_q.get_single_mut() {
-        text.sections[0].value = weapon.weapon_type.display_name().to_string();
-    }
-    if let Ok(mut text) = ammo_q.get_single_mut() {
-        text.sections[0].value = format!("{} / {}", weapon.ammo, weapon.max_ammo);
-    }
+    if let Ok(mut t) = wname_q.get_single_mut() { *t = Text::new(weapon.weapon_type.display_name().to_string()); }
+    if let Ok(mut t) = ammo_q.get_single_mut() { *t = Text::new(format!("{} / {}", weapon.ammo, weapon.max_ammo)); }
 }
 
-// ── Message System ────────────────────────────────────────────────────────────
-fn message_timer_system(
-    time: Res<Time>,
-    mut msg: ResMut<UiMessage>,
-    mut text_q: Query<&mut Text, With<MessageText>>,
-) {
+fn message_timer_system(time: Res<Time>, mut msg: ResMut<UiMessage>, mut text_q: Query<&mut Text, With<MessageText>>) {
     if msg.timer > 0.0 {
-        msg.timer -= time.delta_seconds();
+        msg.timer -= time.delta_secs();
         if msg.timer <= 0.0 {
             msg.text.clear();
-            if let Ok(mut t) = text_q.get_single_mut() { t.sections[0].value.clear(); }
+            if let Ok(mut t) = text_q.get_single_mut() { *t = Text::new(""); }
         }
     }
 }
 
-fn ui_message_listener(
-    mut ev: EventReader<UiMessageEvent>,
-    mut msg: ResMut<UiMessage>,
-    mut text_q: Query<&mut Text, With<MessageText>>,
-) {
+fn ui_message_listener(mut ev: EventReader<UiMessageEvent>, mut msg: ResMut<UiMessage>, mut text_q: Query<&mut Text, With<MessageText>>) {
     for e in ev.read() {
         msg.text = e.text.clone();
         msg.timer = e.duration;
-        if let Ok(mut t) = text_q.get_single_mut() {
-            t.sections[0].value = e.text.clone();
-        }
+        if let Ok(mut t) = text_q.get_single_mut() { *t = Text::new(e.text.clone()); }
     }
 }
 
-// ── Game Over ─────────────────────────────────────────────────────────────────
 fn setup_game_over(mut commands: Commands) {
     commands.spawn((
-        NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            background_color: Color::srgba(0.0, 0.0, 0.0, 0.7).into(),
-            ..default()
-        },
+        Node { width: Val::Percent(100.0), height: Val::Percent(100.0), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
         GameOverRoot,
     )).with_children(|p| {
-        p.spawn((
-            TextBundle::from_section(
-                "SYSTEM FAILURE",
-                TextStyle { font_size: 64.0, color: Color::srgb(1.0, 0.2, 0.1), ..default() },
-            ),
-            GameOverText,
-        ));
-        p.spawn(TextBundle::from_section(
-            "Press R to restart",
-            TextStyle { font_size: 24.0, color: Color::srgb(0.7, 0.7, 0.8), ..default() },
-        ));
+        p.spawn((Text::new("SYSTEM FAILURE"), TextFont { font_size: 64.0, ..default() }, TextColor(Color::srgb(1.0, 0.2, 0.1))));
+        p.spawn((Text::new("Press R to restart"), TextFont { font_size: 24.0, ..default() }, TextColor(Color::srgb(0.7, 0.7, 0.8))));
     });
 }
 
-fn game_over_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut next_state: ResMut<NextState<AppState>>,
-    go_root: Query<Entity, With<GameOverRoot>>,
-    hud_root: Query<Entity, With<HudRoot>>,
-    mut commands: Commands,
-) {
+fn game_over_input(keyboard: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<AppState>>, go_root: Query<Entity, With<GameOverRoot>>, hud_root: Query<Entity, With<HudRoot>>, mut commands: Commands) {
     if keyboard.just_pressed(KeyCode::KeyR) {
         for e in go_root.iter() { commands.entity(e).despawn_recursive(); }
         for e in hud_root.iter() { commands.entity(e).despawn_recursive(); }

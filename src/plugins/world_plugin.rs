@@ -115,8 +115,8 @@ fn spawn_ground(
     });
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Cuboid::new(1200.0, 0.5, 1200.0)),
-            material: mat,
+            mesh: Mesh3d(meshes.add(Cuboid::new(1200.0, 0.5, 1200.0))),
+            material: MeshMaterial3d(mat),
             transform: Transform::from_xyz(0.0, -0.25, 0.0),
             ..default()
         },
@@ -216,8 +216,8 @@ fn spawn_highways(
     // Main east-west highway at z=0
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Cuboid::new(1200.0, 0.8, 18.0)),
-            material: road_mat.clone(),
+            mesh: Mesh3d(meshes.add(Cuboid::new(1200.0, 0.8, 18.0))),
+            material: MeshMaterial3d(road_mat.clone()),
             transform: Transform::from_xyz(0.0, 8.0, 0.0),
             ..default()
         },
@@ -230,8 +230,8 @@ fn spawn_highways(
     // North-south cross
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Cuboid::new(18.0, 0.8, 1200.0)),
-            material: road_mat.clone(),
+            mesh: Mesh3d(meshes.add(Cuboid::new(18.0, 0.8, 1200.0))),
+            material: MeshMaterial3d(road_mat.clone()),
             transform: Transform::from_xyz(0.0, 6.0, 0.0),
             ..default()
         },
@@ -247,8 +247,8 @@ fn spawn_highways(
         let x = i as f32 * 100.0;
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cuboid::new(2.5, 8.0, 2.5)),
-                material: pillar_mat.clone(),
+                mesh: Mesh3d(meshes.add(Cuboid::new(2.5, 8.0, 2.5))),
+                material: MeshMaterial3d(pillar_mat.clone()),
                 transform: Transform::from_xyz(x, 4.0, 0.0),
                 ..default()
             },
@@ -281,8 +281,8 @@ fn spawn_sky_platforms(
 
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cylinder::new(size, 3.0)),
-                material: mat.clone(),
+                mesh: Mesh3d(meshes.add(Cylinder::new(size, 3.0))),
+                material: MeshMaterial3d(mat.clone()),
                 transform: Transform::from_xyz(x, y, z),
                 ..default()
             },
@@ -312,8 +312,8 @@ fn spawn_sky_bridges(
 
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cuboid::new(80.0, 1.5, 6.0)),
-                material: mat.clone(),
+                mesh: Mesh3d(meshes.add(Cuboid::new(80.0, 1.5, 6.0))),
+                material: MeshMaterial3d(mat.clone()),
                 transform: Transform::from_xyz(x, y, z),
                 ..default()
             },
@@ -348,8 +348,8 @@ fn spawn_spaceports(
     for pos in positions {
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cylinder::new(50.0, 2.0)),
-                material: mat.clone(),
+                mesh: Mesh3d(meshes.add(Cylinder::new(50.0, 2.0))),
+                material: MeshMaterial3d(mat.clone()),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
@@ -401,8 +401,8 @@ fn spawn_mountains(
 
             commands.spawn((
                 PbrBundle {
-                    mesh: meshes.add(Cone { radius: r, height: h }),
-                    material: rock_mat.clone(),
+                    mesh: Mesh3d(meshes.add(Cone { radius: r, height: h })),
+                    material: MeshMaterial3d(rock_mat.clone()),
                     transform: Transform::from_translation(pos),
                     ..default()
                 },
@@ -413,8 +413,8 @@ fn spawn_mountains(
                 let snow_pos = corner + Vec3::new(ox, h * 0.92 + 5.0, oz);
                 commands.spawn((
                     PbrBundle {
-                        mesh: meshes.add(Cone { radius: r * 0.3, height: h * 0.15 }),
-                        material: snow_mat.clone(),
+                        mesh: Mesh3d(meshes.add(Cone { radius: r * 0.3, height: h * 0.15 })),
+                        material: MeshMaterial3d(snow_mat.clone()),
                         transform: Transform::from_translation(snow_pos),
                         ..default()
                     },
@@ -538,8 +538,8 @@ fn spawn_river(
         let x = (z * 0.05).sin() * 60.0;
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cuboid::new(25.0, 0.1, 42.0)),
-                material: water_mat.clone(),
+                mesh: Mesh3d(meshes.add(Cuboid::new(25.0, 0.1, 42.0))),
+                material: MeshMaterial3d(water_mat.clone()),
                 transform: Transform::from_xyz(x, -0.1, z),
                 ..default()
             },
@@ -561,8 +561,8 @@ fn spawn_building(
 ) {
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Cuboid::new(width, height, depth)),
-            material: mat,
+            mesh: Mesh3d(meshes.add(Cuboid::new(width, height, depth))),
+            material: MeshMaterial3d(mat),
             transform: Transform::from_translation(position),
             ..default()
         },

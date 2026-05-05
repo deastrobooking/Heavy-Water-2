@@ -61,8 +61,8 @@ fn wave_timer_system(
     mut wave_ev: EventWriter<WaveStartedEvent>,
     mut completed_ev: EventWriter<WaveCompletedEvent>,
 ) {
-    wave.wave_timer += time.delta_seconds();
-    wave.spawn_timer += time.delta_seconds();
+    wave.wave_timer += time.delta_secs();
+    wave.spawn_timer += time.delta_secs();
 
     if wave.wave_timer >= wave.wave_duration {
         wave.wave_timer = 0.0;
@@ -157,7 +157,7 @@ fn enemy_ai_system(
     player_q: Query<&Transform, With<Player>>,
     mut enemy_q: Query<(&mut Transform, &mut Enemy, &mut EnemyStateMachine, &Health), Without<Player>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok(player_transform) = player_q.get_single() else { return };
     let player_pos = player_transform.translation;
 
@@ -197,8 +197,9 @@ fn enemy_ai_system(
                     sm.transition(EnemyAIState::Idle);
                 } else {
                     let move_dir = to_target_flat.normalize();
+                    let pos = transform.translation;
                     transform.translation += move_dir * config.patrol_speed * dt * 60.0;
-                    transform.look_at(transform.translation + move_dir, Vec3::Y);
+                    transform.look_at(pos + move_dir, Vec3::Y);
                 }
             }
             EnemyAIState::Chase => {
@@ -210,12 +211,13 @@ fn enemy_ai_system(
                     let to_player = (player_pos - transform.translation).with_y(0.0).normalize_or_zero();
                     transform.translation += to_player * config.chase_speed * dt * 60.0;
                     if to_player.length_squared() > 0.001 {
-                        transform.look_at(transform.translation + to_player, Vec3::Y);
+                        let pos = transform.translation;
+                        transform.look_at(pos + to_player, Vec3::Y);
                     }
                     // Drone hover
                     if enemy.enemy_type == EnemyType::Drone {
                         transform.translation.y = player_pos.y + 5.0 +
-                            (time.elapsed_seconds() * 2.0 + transform.translation.x).sin() * 0.5;
+                            (time.elapsed_secs() * 2.0 + transform.translation.x).sin() * 0.5;
                     }
                 }
             }
@@ -225,7 +227,8 @@ fn enemy_ai_system(
                 } else {
                     let to_player = (player_pos - transform.translation).with_y(0.0).normalize_or_zero();
                     if to_player.length_squared() > 0.001 {
-                        transform.look_at(transform.translation + to_player, Vec3::Y);
+                        let pos = transform.translation;
+                        transform.look_at(pos + to_player, Vec3::Y);
                     }
                 }
             }
@@ -286,7 +289,7 @@ fn enemy_dead_cleanup(
     mut dead_q: Query<(Entity, &mut DeadEnemy)>,
     mut wave: ResMut<WaveInfo>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     for (entity, mut dead) in dead_q.iter_mut() {
         dead.despawn_timer -= dt;
         if dead.despawn_timer <= 0.0 {

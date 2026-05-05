@@ -51,8 +51,8 @@ fn spawn_chests(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut ma
 
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Cuboid::new(1.5, 1.2, 1.5)),
-                material: gold_mat.clone(),
+                mesh: Mesh3d(meshes.add(Cuboid::new(1.5, 1.2, 1.5))),
+                material: MeshMaterial3d(gold_mat.clone()),
                 transform: Transform::from_xyz(x, 0.6, z),
                 ..default()
             },
@@ -70,14 +70,14 @@ fn spawn_chests(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut ma
 fn chest_proximity_system(
     mut commands: Commands,
     time: Res<Time>,
-    player_q: Query<(&Transform, &mut PlayerStats), With<Player>>,
+    mut player_q: Query<(&Transform, &mut PlayerStats), With<Player>>,
     mut player_health_q: Query<&mut Health, With<Player>>,
     mut chest_q: Query<(Entity, &Transform, &mut Chest)>,
     mut loot_ev: EventWriter<LootCollectedEvent>,
     mut chest_ev: EventWriter<ChestOpenedEvent>,
     mut score: ResMut<PlayerScore>,
 ) {
-    let Ok((pt, mut stats)) = player_q.get_single() else { return };
+    let Ok((pt, mut stats)) = player_q.get_single_mut() else { return };
     let player_pos = pt.translation;
 
     for (entity, chest_transform, mut chest) in chest_q.iter_mut() {

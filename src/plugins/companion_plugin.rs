@@ -68,8 +68,8 @@ fn spawn_companion_entity(
     let size = if companion.kind == CompanionKind::Pet { 0.4 } else { 0.7 };
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Cuboid::new(size, size * 1.5, size)),
-            material: mat,
+            mesh: Mesh3d(meshes.add(Cuboid::new(size, size * 1.5, size))),
+            material: MeshMaterial3d(mat),
             transform: Transform::from_translation(position),
             ..default()
         },
@@ -89,18 +89,18 @@ fn companion_follow_system(
     for (mut transform, mut companion) in companion_q.iter_mut() {
         if !companion.is_alive { continue; }
 
-        companion.orbit_angle += time.delta_seconds() * 0.8;
+        companion.orbit_angle += time.delta_secs() * 0.8;
 
         let angle = companion.orbit_angle;
         let target = Vec3::new(
             player_pos.x + angle.cos() * companion.follow_distance,
             player_pos.y + if companion.kind == CompanionKind::Pet {
-                (time.elapsed_seconds() * 3.0 + angle).sin() * 0.3
+                (time.elapsed_secs() * 3.0 + angle).sin() * 0.3
             } else { 1.5 },
             player_pos.z + angle.sin() * companion.follow_distance,
         );
 
-        transform.translation = transform.translation.lerp(target, time.delta_seconds() * 5.0);
+        transform.translation = transform.translation.lerp(target, time.delta_secs() * 5.0);
     }
 }
 
@@ -112,7 +112,7 @@ fn companion_combat_system(
     mut companion_q: Query<(&Transform, &mut Companion), Without<Player>>,
     enemy_q: Query<(Entity, &Transform, &Health), With<Enemy>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
 
     for (c_transform, mut companion) in companion_q.iter_mut() {
         if !companion.can_attack || !companion.is_alive { continue; }
@@ -160,7 +160,7 @@ fn companion_heal_system(
     mut player_q: Query<&mut Health, With<Player>>,
     mut heal_ev: EventWriter<PlayerHealedEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok(mut p_health) = player_q.get_single_mut() else { return };
 
     for mut companion in companion_q.iter_mut() {
@@ -187,7 +187,7 @@ fn companion_projectile_system(
     mut damaged_ev: EventWriter<EnemyDamagedEvent>,
     mut killed_ev: EventWriter<EnemyKilledEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     for (entity, mut transform, mut proj) in proj_q.iter_mut() {
         transform.translation += proj.direction * proj.speed * dt;
         proj.lifetime -= dt;

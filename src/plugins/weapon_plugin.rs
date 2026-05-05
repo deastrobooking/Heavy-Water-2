@@ -64,7 +64,7 @@ fn weapon_fire_system(
     mut cam_q: Query<&GlobalTransform, With<PlayerCamera>>,
     mut fired_ev: EventWriter<WeaponFiredEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((mut inv, _, mut sm, _)) = player_q.get_single_mut() else { return };
     let Ok(cam_transform) = cam_q.get_single_mut() else { return };
 
@@ -175,7 +175,7 @@ fn projectile_update_system(
     mut enemy_damaged_ev: EventWriter<EnemyDamagedEvent>,
     mut enemy_killed_ev: EventWriter<EnemyKilledEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
 
     for (proj_entity, mut proj_transform, mut proj) in proj_q.iter_mut() {
         // Move
@@ -205,13 +205,15 @@ fn projectile_update_system(
 
         // Enemy hit detection
         let mut hit = false;
+        let mut explosion: Option<(Vec3, f32, f32)> = None;
         for (e_entity, e_transform, mut e_health, mut e_damageable, enemy) in enemy_q.iter_mut() {
             if !e_health.is_alive() { continue; }
             let dist = proj_transform.translation.distance(e_transform.translation);
             if dist < 1.5 {
                 if proj.is_explosive {
-                    explode(&proj_transform.translation, proj.explosion_radius, proj.damage,
-                        &mut enemy_q, &mut enemy_damaged_ev, &mut enemy_killed_ev);
+                    explosion = Some((proj_transform.translation, proj.explosion_radius, proj.damage));
+                    hit = true;
+                    break;
                 } else {
                     let info = DamageInfo::new(proj.damage, DamageType::Plasma);
                     let result = apply_damage(&mut e_health, &mut e_damageable, &info);
@@ -234,6 +236,9 @@ fn projectile_update_system(
                     break;
                 }
             }
+        }
+        if let Some((pos, radius, dmg)) = explosion {
+            explode(&pos, radius, dmg, &mut enemy_q, &mut enemy_damaged_ev, &mut enemy_killed_ev);
         }
         if hit {
             commands.entity(proj_entity).despawn_recursive();
@@ -297,7 +302,7 @@ fn melee_combo_system(
     mut damaged_ev: EventWriter<EnemyDamagedEvent>,
     mut killed_ev: EventWriter<EnemyKilledEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((_, mut combo, mut sm)) = player_q.get_single_mut() else { return };
     let Ok(cam) = cam_q.get_single() else { return };
 
@@ -425,7 +430,7 @@ fn beam_sabre_update_system(
     mut damaged_ev: EventWriter<EnemyDamagedEvent>,
     mut killed_ev: EventWriter<EnemyKilledEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((mut sabre, mut sm)) = player_q.get_single_mut() else { return };
     let Ok(cam) = cam_q.get_single() else { return };
 

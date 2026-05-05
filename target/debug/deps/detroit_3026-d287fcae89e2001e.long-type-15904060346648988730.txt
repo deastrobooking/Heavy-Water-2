@@ -1,8 +1,0 @@
-bevy::bevy_core_pipeline::contrast_adaptive_sharpening::ContrastAdaptiveSharpening
-bloom::downsampling_pipeline::BloomDownsamplingPipelineIds
-core_pipeline::skybox::prepass::RenderSkyboxPrepassPipeline
-core_pipeline::skybox::prepass::SkyboxPrepassBindGroup
-pbr::volumetric_fog::render::ViewVolumetricFogPipelines
-sprite::texture_slice::computed_slices::ComputedTextureSlices
-&mut bevy_rapier3d::control::KinematicCharacterController
-(&mut bevy_rapier3d::control::KinematicCharacterController, &bevy_rapier3d::control::KinematicCharacterControllerOutput, &mut player::PlayerMovement, &mut player::PlayerStats, &mut player::JetpackState, &mut player::DodgeState, &bevy::prelude::Transform, &mut player::PlayerStateMachine)

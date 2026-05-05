@@ -64,12 +64,16 @@ fn spawn_player(mut commands: Commands) {
             KinematicCharacterControllerOutput::default(),
             PlayerStats::default(),
             PlayerMovement::default(),
+        ))
+        .insert((
             JetpackState::default(),
             DodgeState::new(),
             ParryState::new(),
             PlayerStateMachine::default(),
             Health::new(100.0),
             Damageable::default(),
+        ))
+        .insert((
             ArmorSet::default(),
             Inventory::default(),
             WeaponInventory::default(),
@@ -93,7 +97,7 @@ fn spawn_player(mut commands: Commands) {
                 intensity: 0.25,
                 ..default()
             },
-            FogSettings {
+            DistanceFog {
                 color: Color::srgba(0.02, 0.02, 0.08, 1.0),
                 falloff: FogFalloff::ExponentialSquared { density: 0.0015 },
                 ..default()
@@ -104,15 +108,15 @@ fn spawn_player(mut commands: Commands) {
 
 fn grab_cursor(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
     if let Ok(mut window) = windows.get_single_mut() {
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-        window.cursor.visible = false;
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+        window.cursor_options.visible = false;
     }
 }
 
 fn release_cursor(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
     if let Ok(mut window) = windows.get_single_mut() {
-        window.cursor.grab_mode = CursorGrabMode::None;
-        window.cursor.visible = true;
+        window.cursor_options.grab_mode = CursorGrabMode::None;
+        window.cursor_options.visible = true;
     }
 }
 
@@ -160,7 +164,7 @@ fn player_movement(
         With<Player>,
     >,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((
         mut controller,
         output,
@@ -264,7 +268,7 @@ fn player_dodge_update(
     >,
     mut dodge_ev: EventWriter<PlayerDodgeEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((mut dodge, mut stats, mut damageable, transform, mut state)) = player_q.get_single_mut() else { return };
 
     dodge.cooldown_timer = (dodge.cooldown_timer - dt).max(0.0);
@@ -303,7 +307,7 @@ fn player_parry_update(
     time: Res<Time>,
     mut player_q: Query<(&mut ParryState, &mut PlayerStateMachine), With<Player>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let Ok((mut parry, mut state)) = player_q.get_single_mut() else { return };
 
     parry.cooldown_timer = (parry.cooldown_timer - dt).max(0.0);
@@ -328,7 +332,7 @@ fn player_parry_update(
 
 // ── State Update ──────────────────────────────────────────────────────────────
 fn player_state_update(time: Res<Time>, mut q: Query<&mut PlayerStateMachine, With<Player>>) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     if let Ok(mut sm) = q.get_single_mut() {
         sm.timer += dt;
     }
@@ -340,7 +344,7 @@ fn player_stamina_regen(
     mut q: Query<(&mut PlayerStats, &DodgeState), With<Player>>,
     mut ev: EventWriter<PlayerStaminaChangedEvent>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     if let Ok((mut stats, dodge)) = q.get_single_mut() {
         if !dodge.is_dodging && stats.stamina < stats.max_stamina {
             stats.stamina = (stats.stamina + 10.0 * dt).min(stats.max_stamina);
@@ -354,7 +358,7 @@ fn player_invulnerability_update(
     time: Res<Time>,
     mut q: Query<&mut Damageable, With<Player>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     if let Ok(mut dmg) = q.get_single_mut() {
         if dmg.invulnerability_timer > 0.0 {
             dmg.invulnerability_timer -= dt;
