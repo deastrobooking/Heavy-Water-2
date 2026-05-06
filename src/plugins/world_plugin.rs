@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::render::mesh::{PrimitiveTopology, Indices};
+use bevy::render::render_asset::RenderAssetUsages;
 use rand::Rng;
 
 use crate::state::AppState;
@@ -38,7 +40,7 @@ fn generate_city(
     let pal = Palette::build(m);
 
     spawn_lighting(&mut commands);
-    spawn_ground(&mut commands, &mut meshes, &pal);
+    spawn_terrain(&mut commands, &mut meshes, &pal, seed);
     spawn_downtown(&mut commands, &mut meshes, &pal, seed);
     spawn_industrial(&mut commands, &mut meshes, &pal, seed + 1);
     spawn_residential(&mut commands, &mut meshes, &pal, seed + 2);
@@ -184,24 +186,138 @@ fn spawn_lighting(commands: &mut Commands) {
     });
 }
 
-// ── Ground ────────────────────────────────────────────────────────────────────
-fn spawn_ground(
+// ── Terrain ───────────────────────────────────────────────────────────────────
+
+/// Smooth hermite interpolation.
+fn smoothstep(lo: f32, hi: f32, x: f32) -> f32 {
+    let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Layered sine-wave height at world position (x, z).
+/// The city centre is kept near-flat; elevation builds toward the outer ring.
+fn terrain_height(x: f32, z: f32, seed: u64) -> f32 {
+    // Phase offset so every world seed looks distinct.
+    let so = seeded(seed, 7) * std::f32::consts::TAU;
+
+    // Distance from city centre.
+    let dist = (x * x + z * z).sqrt();
+
+    // 1.0 in the city core, 0.0 beyond the outer threshold.
+    let city_flat = 1.0 - smoothstep(120.0, 260.0, dist);
+
+    // ── Layered octaves ─────────────────────────────────────────────────────
+    // Large rolling hills (low frequency, high amplitude).
+    let large = (x * 0.007 + so).sin() * (z * 0.008 + so * 0.7).cos() * 16.0;
+    // Medium undulations.
+    let med   = (x * 0.022 + z * 0.019 + so * 0.3).sin() * 7.0;
+    // Small surface variation.
+    let small = (x * 0.055 - z * 0.048 + so * 0.5).sin() * 2.8;
+    // Micro detail.
+    let micro = (x * 0.13 + z * 0.11).sin() * 0.9;
+
+    // ── Ridge lines ─────────────────────────────────────────────────────────
+    // abs(sin) creates sharp ridges; scale by distance to keep them in the outer world.
+    let ridge_mask = smoothstep(200.0, 400.0, dist);
+    let ridge = (x * 0.011 + z * 0.009 + so).sin().abs() * 10.0 * ridge_mask;
+
+    let base = large + med + small + micro + ridge;
+
+    // Terrain rises significantly toward the world perimeter.
+    let edge_lift = smoothstep(300.0, 520.0, dist) * 28.0;
+
+    // Mountain peaks cluster in the four corners.
+    let mut peak_boost = 0.0f32;
+    for &(cx, cz) in &[(480.0f32, 480.0), (-480.0, 480.0), (480.0, -480.0), (-480.0, -480.0)] {
+        let d = ((x - cx) * (x - cx) + (z - cz) * (z - cz)).sqrt();
+        peak_boost += smoothstep(220.0, 0.0, d) * 60.0;
+    }
+
+    // Flatten the city zone; outer areas get full amplitude.
+    (base + edge_lift + peak_boost) * (1.0 - city_flat)
+}
+
+fn spawn_terrain(
     commands: &mut Commands,
     meshes:   &mut Assets<Mesh>,
     pal:      &Palette,
+    seed:     u64,
 ) {
+    const RES:   usize = 160;          // quads per side — ~7.5 m per cell
+    const WORLD: f32   = 1200.0;
+    const CELL:  f32   = WORLD / RES as f32;
+
+    // ── Height grid ─────────────────────────────────────────────────────────
+    let vcount = (RES + 1) * (RES + 1);
+    let mut h = vec![0.0f32; vcount];
+    for zi in 0..=RES {
+        for xi in 0..=RES {
+            let wx = (xi as f32 / RES as f32 - 0.5) * WORLD;
+            let wz = (zi as f32 / RES as f32 - 0.5) * WORLD;
+            h[zi * (RES + 1) + xi] = terrain_height(wx, wz, seed);
+        }
+    }
+
+    // ── Mesh buffers ────────────────────────────────────────────────────────
+    let mut positions = Vec::with_capacity(vcount);
+    let mut normals   = Vec::with_capacity(vcount);
+    let mut uvs       = Vec::with_capacity(vcount);
+
+    for zi in 0..=RES {
+        for xi in 0..=RES {
+            let wx = (xi as f32 / RES as f32 - 0.5) * WORLD;
+            let wz = (zi as f32 / RES as f32 - 0.5) * WORLD;
+            let wy = h[zi * (RES + 1) + xi];
+            positions.push([wx, wy, wz]);
+            uvs.push([xi as f32 / RES as f32, zi as f32 / RES as f32]);
+
+            // Finite-difference normal (upward).
+            let hx0 = h[zi * (RES + 1) + xi.saturating_sub(1)];
+            let hx1 = h[zi * (RES + 1) + (xi + 1).min(RES)];
+            let hz0 = h[zi.saturating_sub(1) * (RES + 1) + xi];
+            let hz1 = h[(zi + 1).min(RES) * (RES + 1) + xi];
+            let dx  = Vec3::new(2.0 * CELL, hx1 - hx0, 0.0);
+            let dz  = Vec3::new(0.0, hz1 - hz0, 2.0 * CELL);
+            let n   = dz.cross(dx).normalize();
+            normals.push([n.x, n.y, n.z]);
+        }
+    }
+
+    // Two triangles per quad, CCW winding, normals pointing up.
+    let mut tri_idx = Vec::with_capacity(RES * RES * 6);
+    for zi in 0..RES {
+        for xi in 0..RES {
+            let tl = (zi * (RES + 1) + xi) as u32;
+            let tr = tl + 1;
+            let bl = tl + (RES + 1) as u32;
+            let br = bl + 1;
+            tri_idx.extend_from_slice(&[tl, bl, tr, tr, bl, br]);
+        }
+    }
+
+    // Build collider data before the Vecs are consumed by the mesh.
+    let col_verts: Vec<Vec3>    = positions.iter().map(|p| Vec3::from(*p)).collect();
+    let col_tris:  Vec<[u32;3]> = tri_idx.chunks_exact(3)
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL,   normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0,     uvs);
+    mesh.insert_indices(Indices::U32(tri_idx));
+
     commands.spawn((
         PbrBundle {
-            mesh:      Mesh3d(meshes.add(Cuboid::new(1200.0, 0.5, 1200.0))),
+            mesh:      Mesh3d(meshes.add(mesh)),
             material:  MeshMaterial3d(pal.ground.clone()),
-            transform: Transform::from_xyz(0.0, -0.25, 0.0),
+            transform: Transform::IDENTITY,
             ..default()
         },
         WorldGeometry,
         WalkableSurface,
-        Building { zone: WorldZone::Ground, height: 0.5 },
         bevy_rapier3d::prelude::RigidBody::Fixed,
-        bevy_rapier3d::prelude::Collider::cuboid(600.0, 0.25, 600.0),
+        bevy_rapier3d::prelude::Collider::trimesh(col_verts, col_tris),
     ));
 }
 
@@ -419,6 +535,9 @@ fn spawn_spaceports(
 }
 
 // ── Mountains ─────────────────────────────────────────────────────────────────
+/// Spawn layered rock spires and snow caps on top of the terrain heightmap.
+/// Each "mountain" is several overlapping cones of varying radii and heights
+/// so the silhouette reads as a proper rocky peak rather than a single cone.
 fn spawn_mountains(
     commands: &mut Commands,
     meshes:   &mut Assets<Mesh>,
@@ -426,42 +545,89 @@ fn spawn_mountains(
     seed:     u64,
 ) {
     let corners = [
-        Vec3::new( 450.0, 0.0,  450.0),
-        Vec3::new(-450.0, 0.0,  450.0),
-        Vec3::new( 450.0, 0.0, -450.0),
-        Vec3::new(-450.0, 0.0, -450.0),
+        Vec3::new( 460.0, 0.0,  460.0),
+        Vec3::new(-460.0, 0.0,  460.0),
+        Vec3::new( 460.0, 0.0, -460.0),
+        Vec3::new(-460.0, 0.0, -460.0),
     ];
 
     for (ci, &corner) in corners.iter().enumerate() {
-        for i in 0..15u64 {
-            let idx = ci as u64 * 15 + i;
-            let ox  = seeded(seed, idx * 3) * 150.0 - 75.0;
-            let oz  = seeded(seed, idx * 3 + 1) * 150.0 - 75.0;
-            let h   = 40.0 + seeded(seed, idx * 3 + 2) * 120.0;
-            let r   = 20.0 + seeded(seed, idx * 4) * 30.0;
-            let pos = corner + Vec3::new(ox, h * 0.5, oz);
+        for i in 0..18u64 {
+            let idx = ci as u64 * 20 + i;
 
+            let ox = (seeded(seed, idx * 5    ) - 0.5) * 200.0;
+            let oz = (seeded(seed, idx * 5 + 1) - 0.5) * 200.0;
+            let wx = corner.x + ox;
+            let wz = corner.z + oz;
+
+            // Base Y from terrain so spires sit flush on the landscape.
+            let ground_y = terrain_height(wx, wz, seed - 5);
+
+            let peak_h = 50.0 + seeded(seed, idx * 5 + 2) * 130.0;
+            let base_r = 22.0 + seeded(seed, idx * 5 + 3) * 35.0;
+
+            // ── Main spire ──────────────────────────────────────────────
             commands.spawn((
                 PbrBundle {
-                    mesh:      Mesh3d(meshes.add(Cone { radius: r, height: h })),
+                    mesh:      Mesh3d(meshes.add(Cone { radius: base_r, height: peak_h })),
                     material:  MeshMaterial3d(pal.rock.clone()),
-                    transform: Transform::from_translation(pos),
+                    transform: Transform::from_xyz(wx, ground_y + peak_h * 0.5, wz),
                     ..default()
                 },
                 WorldGeometry,
             ));
 
-            if h > 80.0 {
-                let snow_pos = corner + Vec3::new(ox, h * 0.92 + 5.0, oz);
+            // ── Shoulder ridges (2 smaller cones offset from the peak) ──
+            for s in 0..2u64 {
+                let sr = base_r * (0.45 + seeded(seed, idx * 5 + 4 + s) * 0.25);
+                let sh = peak_h * (0.50 + seeded(seed, idx * 7 + s) * 0.30);
+                let sdx = (seeded(seed, idx * 11 + s) - 0.5) * base_r * 1.2;
+                let sdz = (seeded(seed, idx * 13 + s) - 0.5) * base_r * 1.2;
                 commands.spawn((
                     PbrBundle {
-                        mesh:      Mesh3d(meshes.add(Cone { radius: r * 0.3, height: h * 0.15 })),
-                        material:  MeshMaterial3d(pal.snow.clone()),
-                        transform: Transform::from_translation(snow_pos),
+                        mesh:     Mesh3d(meshes.add(Cone { radius: sr, height: sh })),
+                        material: MeshMaterial3d(pal.rock.clone()),
+                        transform: Transform::from_xyz(
+                            wx + sdx, ground_y + sh * 0.5, wz + sdz,
+                        ),
                         ..default()
                     },
                     WorldGeometry,
                 ));
+            }
+
+            // ── Snow cap on tall peaks ───────────────────────────────────
+            if peak_h > 90.0 {
+                let cap_r = base_r * 0.28;
+                let cap_h = peak_h * 0.18;
+                let cap_y = ground_y + peak_h - cap_h * 0.35;
+                commands.spawn((
+                    PbrBundle {
+                        mesh:      Mesh3d(meshes.add(Cone { radius: cap_r, height: cap_h })),
+                        material:  MeshMaterial3d(pal.snow.clone()),
+                        transform: Transform::from_xyz(wx, cap_y, wz),
+                        ..default()
+                    },
+                    WorldGeometry,
+                ));
+
+                // Secondary snow blobs for a less perfect cap.
+                for b in 0..2u64 {
+                    let br = cap_r * (0.4 + seeded(seed, idx * 17 + b) * 0.3);
+                    let bdx = (seeded(seed, idx * 19 + b) - 0.5) * cap_r * 1.4;
+                    let bdz = (seeded(seed, idx * 23 + b) - 0.5) * cap_r * 1.4;
+                    commands.spawn((
+                        PbrBundle {
+                            mesh:     Mesh3d(meshes.add(Sphere::new(br))),
+                            material: MeshMaterial3d(pal.snow.clone()),
+                            transform: Transform::from_xyz(
+                                wx + bdx, cap_y + br * 0.3, wz + bdz,
+                            ),
+                            ..default()
+                        },
+                        WorldGeometry,
+                    ));
+                }
             }
         }
     }
