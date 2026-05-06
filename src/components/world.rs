@@ -66,3 +66,13 @@ pub struct SkyPlatform;
 /// Walkable surface (used for raycast filtering equivalent).
 #[derive(Component, Default)]
 pub struct WalkableSurface;
+
+/// A world-space loot pickup spawned when enemies die.
+#[derive(Component, Debug, Clone)]
+pub struct WorldLoot {
+    pub item_id: &'static str,
+    pub quantity: u32,
+    pub credits: u32,
+    pub pickup_radius: f32,
+    pub base_y: f32,
+}

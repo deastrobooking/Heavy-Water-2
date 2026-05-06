@@ -10,7 +10,7 @@ use crate::components::player::*;
 use crate::components::weapon::*;
 use crate::components::armor::ArmorSet;
 use crate::components::inventory::Inventory;
-use crate::resources::GameSettings;
+use crate::resources::{GameSettings, CameraShake};
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
 pub struct PlayerPlugin;
@@ -24,6 +24,7 @@ impl Plugin for PlayerPlugin {
                 Update,
                 (
                     player_look,
+                    camera_shake_system,
                     player_movement,
                     player_dodge_update,
                     player_parry_update,
@@ -143,6 +144,36 @@ fn player_look(
         pitch.0 = (pitch.0 - delta.y * sens)
             .clamp(-std::f32::consts::FRAC_PI_2 * 0.9, std::f32::consts::FRAC_PI_2 * 0.9);
         ct.rotation = Quat::from_rotation_x(pitch.0);
+    }
+}
+
+// ── Camera Shake ──────────────────────────────────────────────────────────────
+fn camera_shake_system(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut cam_q: Query<&mut Transform, With<PlayerCamera>>,
+    mut damage_ev: EventReader<PlayerDamagedEvent>,
+) {
+    for ev in damage_ev.read() {
+        let trauma = (ev.amount / 25.0).clamp(0.12, 0.65);
+        shake.add_trauma(trauma);
+    }
+
+    shake.trauma = (shake.trauma - time.delta_secs() * 2.0).max(0.0);
+
+    let Ok(mut cam) = cam_q.get_single_mut() else { return };
+
+    if shake.trauma > 0.01 {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let mag = shake.trauma * shake.trauma * 0.18;
+        cam.translation = Vec3::new(
+            rng.gen_range(-1.0f32..1.0) * mag,
+            0.8 + rng.gen_range(-0.5f32..0.5) * mag,
+            rng.gen_range(-1.0f32..1.0) * mag,
+        );
+    } else {
+        cam.translation = Vec3::new(0.0, 0.8, 0.0);
     }
 }
 

@@ -170,3 +170,7 @@ impl Enemy {
 pub struct DeadEnemy {
     pub despawn_timer: f32,
 }
+
+/// Marks a boss-tier enemy (spawned every 5th wave).
+#[derive(Component, Default)]
+pub struct BossEnemy;

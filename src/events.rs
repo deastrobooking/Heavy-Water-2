@@ -110,6 +110,13 @@ pub struct ItemPickedUpEvent {
     pub quantity: u32,
 }
 
+// ── Boss ──────────────────────────────────────────────────────────────────────
+#[derive(Event, Debug)]
+pub struct BossSpawnedEvent {
+    pub wave: u32,
+    pub position: Vec3,
+}
+
 // ── UI ────────────────────────────────────────────────────────────────────────
 #[derive(Event, Debug)]
 pub struct UiMessageEvent {
@@ -158,6 +165,8 @@ impl Plugin for EventsPlugin {
             // Inventory
             .add_event::<InventoryChangedEvent>()
             .add_event::<ItemPickedUpEvent>()
+            // Boss
+            .add_event::<BossSpawnedEvent>()
             // UI
             .add_event::<UiMessageEvent>()
             .add_event::<UiDamageNumberEvent>();

@@ -22,8 +22,9 @@ use plugins::{
     ArmorPlugin,
     CraftingPlugin,
     UiPlugin,
+    SavePlugin,
 };
-use resources::{WaveInfo, GameSettings, PlayerScore};
+use resources::{WaveInfo, GameSettings, PlayerScore, CameraShake};
 
 fn main() {
     App::new()
@@ -48,6 +49,7 @@ fn main() {
         .init_resource::<WaveInfo>()
         .init_resource::<GameSettings>()
         .init_resource::<PlayerScore>()
+        .init_resource::<CameraShake>()
         // Event infrastructure
         .add_plugins(EventsPlugin)
         // Game plugins
@@ -61,6 +63,7 @@ fn main() {
             CompanionPlugin,
             ArmorPlugin,
             CraftingPlugin,
+            SavePlugin,
         ))
         .run();
 }

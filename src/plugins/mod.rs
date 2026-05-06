@@ -7,6 +7,7 @@ pub mod companion_plugin;
 pub mod armor_plugin;
 pub mod crafting_plugin;
 pub mod ui_plugin;
+pub mod save_plugin;
 
 pub use player_plugin::PlayerPlugin;
 pub use weapon_plugin::WeaponPlugin;
@@ -17,3 +18,4 @@ pub use companion_plugin::CompanionPlugin;
 pub use armor_plugin::ArmorPlugin;
 pub use crafting_plugin::CraftingPlugin;
 pub use ui_plugin::UiPlugin;
+pub use save_plugin::SavePlugin;

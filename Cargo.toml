@@ -15,6 +15,7 @@ bevy_rapier3d = { version = "0.28", features = ["dim3"] }
 rand = "0.8"
 noise = "0.8"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [features]
 # Use dynamic linking for faster incremental dev builds:  cargo run --features dynamic

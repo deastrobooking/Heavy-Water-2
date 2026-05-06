@@ -76,3 +76,16 @@ pub struct PlayerScore {
     pub chests_opened: u32,
     pub waves_survived: u32,
 }
+
+// ── Camera Shake ──────────────────────────────────────────────────────────────
+// Trauma model: trauma decays over time, shake magnitude = trauma^2.
+#[derive(Resource, Debug, Default)]
+pub struct CameraShake {
+    pub trauma: f32,
+}
+
+impl CameraShake {
+    pub fn add_trauma(&mut self, amount: f32) {
+        self.trauma = (self.trauma + amount).min(1.0);
+    }
+}

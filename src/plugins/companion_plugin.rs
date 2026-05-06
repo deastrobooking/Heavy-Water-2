@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::state::AppState;
 use crate::events::{PlayerHealedEvent, EnemyDamagedEvent, EnemyKilledEvent};
+use crate::plugins::weapon_plugin::ProjectileAssets;
 use crate::components::player::Player;
 use crate::components::companion::*;
 use crate::components::enemy::Enemy;
@@ -108,11 +109,12 @@ fn companion_follow_system(
 fn companion_combat_system(
     time: Res<Time>,
     mut commands: Commands,
-    player_q: Query<&Transform, With<Player>>,
+    proj_assets: Option<Res<ProjectileAssets>>,
     mut companion_q: Query<(&Transform, &mut Companion), Without<Player>>,
     enemy_q: Query<(Entity, &Transform, &Health), With<Enemy>>,
 ) {
     let dt = time.delta_secs();
+    let Some(assets) = proj_assets else { return };
 
     for (c_transform, mut companion) in companion_q.iter_mut() {
         if !companion.can_attack || !companion.is_alive { continue; }
@@ -134,13 +136,13 @@ fn companion_combat_system(
 
         if let Some((_, target_pos, _)) = nearest {
             let dir = (target_pos - c_transform.translation).normalize_or_zero();
-            // Fire companion projectile
             commands.spawn((
-                Transform::from_translation(c_transform.translation + dir * 0.5),
-                GlobalTransform::default(),
-                Visibility::default(),
-                InheritedVisibility::default(),
-                ViewVisibility::default(),
+                PbrBundle {
+                    mesh: Mesh3d(assets.sphere_sm.clone()),
+                    material: MeshMaterial3d(assets.mat_companion.clone()),
+                    transform: Transform::from_translation(c_transform.translation + dir * 0.5),
+                    ..default()
+                },
                 CompanionProjectile {
                     damage: companion.attack_damage,
                     speed: 25.0,
