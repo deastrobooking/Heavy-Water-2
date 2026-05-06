@@ -4,6 +4,7 @@ use rand::Rng;
 use crate::state::AppState;
 use crate::components::world::*;
 use crate::resources::GameSettings;
+use crate::lsystem::tree::{TreeTemplate, TreeKind, TreeRoot, spawn_tree};
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
 pub struct WorldPlugin;
@@ -15,38 +16,42 @@ impl Plugin for WorldPlugin {
     }
 }
 
-fn cleanup_world(mut commands: Commands, q: Query<Entity, With<WorldGeometry>>) {
-    for e in q.iter() { commands.entity(e).despawn_recursive(); }
+fn cleanup_world(
+    mut commands: Commands,
+    world_q: Query<Entity, With<WorldGeometry>>,
+    tree_q:  Query<Entity, With<TreeRoot>>,
+) {
+    for e in world_q.iter() { commands.entity(e).despawn_recursive(); }
+    for e in tree_q.iter()  { commands.entity(e).despawn_recursive(); }
 }
 
 // ── World generation entry point ──────────────────────────────────────────────
 fn generate_city(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    settings: Res<GameSettings>,
+    mut meshes:   ResMut<Assets<Mesh>>,
+    mut mats:     ResMut<Assets<StandardMaterial>>,
+    settings:     Res<GameSettings>,
 ) {
     let seed = settings.world_seed;
+    let m    = &mut *mats;
 
-    // Lighting
+    let pal = Palette::build(m);
+
     spawn_lighting(&mut commands);
-
-    // Ground (1200×1200)
-    spawn_ground(&mut commands, &mut meshes, &mut materials);
-
-    // Zones
-    spawn_downtown(&mut commands, &mut meshes, &mut materials, seed);
-    spawn_industrial(&mut commands, &mut meshes, &mut materials, seed + 1);
-    spawn_residential(&mut commands, &mut meshes, &mut materials, seed + 2);
-    spawn_highways(&mut commands, &mut meshes, &mut materials);
-    spawn_sky_platforms(&mut commands, &mut meshes, &mut materials, seed + 3);
-    spawn_sky_bridges(&mut commands, &mut meshes, &mut materials, seed + 4);
-    spawn_spaceports(&mut commands, &mut meshes, &mut materials);
-    spawn_mountains(&mut commands, &mut meshes, &mut materials, seed + 5);
+    spawn_ground(&mut commands, &mut meshes, &pal);
+    spawn_downtown(&mut commands, &mut meshes, &pal, seed);
+    spawn_industrial(&mut commands, &mut meshes, &pal, seed + 1);
+    spawn_residential(&mut commands, &mut meshes, &pal, seed + 2);
+    spawn_highways(&mut commands, &mut meshes, &pal);
+    spawn_sky_platforms(&mut commands, &mut meshes, &pal, seed + 3);
+    spawn_sky_bridges(&mut commands, &mut meshes, &pal, seed + 4);
+    spawn_spaceports(&mut commands, &mut meshes, &pal);
+    spawn_mountains(&mut commands, &mut meshes, &pal, seed + 5);
     spawn_neon_lights(&mut commands, seed + 6);
     spawn_street_lights(&mut commands, seed + 7);
-    spawn_outer_districts(&mut commands, &mut meshes, &mut materials, seed + 8);
-    spawn_river(&mut commands, &mut meshes, &mut materials);
+    spawn_outer_districts(&mut commands, &mut meshes, &pal, seed + 8);
+    spawn_river(&mut commands, &mut meshes, &pal);
+    spawn_trees(&mut commands, &mut meshes, m, seed + 9);
 }
 
 // ── Seeded RNG helper ─────────────────────────────────────────────────────────
@@ -56,24 +61,103 @@ fn seeded(seed: u64, index: u64) -> f32 {
     frac as f32
 }
 
-// ── Materials ─────────────────────────────────────────────────────────────────
-fn building_mat(
-    materials: &mut Assets<StandardMaterial>,
-    color: Color,
-    emissive: Option<Color>,
-) -> Handle<StandardMaterial> {
-    materials.add(StandardMaterial {
-        base_color: color,
-        metallic: 0.3,
-        perceptual_roughness: 0.7,
-        emissive: emissive.map(|c| c.into()).unwrap_or(LinearRgba::BLACK),
-        ..default()
-    })
+// ── Shared material palette ───────────────────────────────────────────────────
+struct Palette {
+    ground:           Handle<StandardMaterial>,
+
+    downtown_a:       Handle<StandardMaterial>,
+    downtown_b:       Handle<StandardMaterial>,
+    downtown_c:       Handle<StandardMaterial>,
+    downtown_facade:  Handle<StandardMaterial>,
+
+    industrial_metal: Handle<StandardMaterial>,
+    industrial_rust:  Handle<StandardMaterial>,
+
+    residential_a:    Handle<StandardMaterial>,
+    residential_b:    Handle<StandardMaterial>,
+
+    highway:          Handle<StandardMaterial>,
+    sky_platform:     Handle<StandardMaterial>,
+    water:            Handle<StandardMaterial>,
+
+    rock:             Handle<StandardMaterial>,
+    snow:             Handle<StandardMaterial>,
+}
+
+impl Palette {
+    fn build(m: &mut Assets<StandardMaterial>) -> Self {
+        let mk = |base: Color, emissive: LinearRgba, metallic: f32, roughness: f32| {
+            StandardMaterial {
+                base_color:           base,
+                emissive,
+                metallic,
+                perceptual_roughness: roughness,
+                reflectance:          metallic * 0.8 + 0.1,
+                ..default()
+            }
+        };
+
+        Self {
+            ground: m.add(StandardMaterial {
+                base_color:           Color::srgb(0.07, 0.07, 0.09),
+                metallic:             0.55,
+                perceptual_roughness: 0.50,
+                reflectance:          0.4,
+                ..default()
+            }),
+
+            downtown_a:  m.add(mk(Color::srgb(0.06, 0.09, 0.16), LinearRgba::new(0.0, 0.30, 0.70, 1.0), 0.90, 0.12)),
+            downtown_b:  m.add(mk(Color::srgb(0.10, 0.07, 0.05), LinearRgba::new(0.60, 0.20, 0.0,  1.0), 0.85, 0.15)),
+            downtown_c:  m.add(mk(Color::srgb(0.06, 0.11, 0.07), LinearRgba::new(0.0,  0.40, 0.15, 1.0), 0.88, 0.13)),
+            downtown_facade: m.add(StandardMaterial {
+                base_color:           Color::srgb(0.18, 0.18, 0.22),
+                metallic:             0.30,
+                perceptual_roughness: 0.65,
+                ..default()
+            }),
+
+            industrial_metal: m.add(mk(Color::srgb(0.22, 0.18, 0.12), LinearRgba::new(0.50, 0.15, 0.0, 1.0), 0.60, 0.55)),
+            industrial_rust:  m.add(mk(Color::srgb(0.30, 0.14, 0.05), LinearRgba::new(0.20, 0.04, 0.0, 1.0), 0.10, 0.92)),
+
+            residential_a: m.add(mk(Color::srgb(0.22, 0.20, 0.16), LinearRgba::new(0.15, 0.12, 0.04, 1.0), 0.05, 0.85)),
+            residential_b: m.add(mk(Color::srgb(0.18, 0.17, 0.20), LinearRgba::new(0.05, 0.05, 0.18, 1.0), 0.08, 0.80)),
+
+            highway: m.add(StandardMaterial {
+                base_color:           Color::srgb(0.10, 0.10, 0.13),
+                metallic:             0.20,
+                perceptual_roughness: 0.75,
+                ..default()
+            }),
+            sky_platform: m.add(mk(Color::srgb(0.08, 0.11, 0.22), LinearRgba::new(0.0, 0.25, 0.60, 1.0), 0.65, 0.30)),
+
+            water: m.add(StandardMaterial {
+                base_color:           Color::srgba(0.02, 0.18, 0.35, 0.82),
+                emissive:             LinearRgba::new(0.0, 0.10, 0.28, 1.0),
+                metallic:             0.90,
+                perceptual_roughness: 0.08,
+                reflectance:          0.95,
+                alpha_mode:           AlphaMode::Blend,
+                ..default()
+            }),
+
+            rock: m.add(StandardMaterial {
+                base_color:           Color::srgb(0.28, 0.25, 0.22),
+                metallic:             0.05,
+                perceptual_roughness: 0.95,
+                ..default()
+            }),
+            snow: m.add(StandardMaterial {
+                base_color:           Color::srgb(0.88, 0.92, 1.00),
+                metallic:             0.0,
+                perceptual_roughness: 0.80,
+                ..default()
+            }),
+        }
+    }
 }
 
 // ── Lighting ──────────────────────────────────────────────────────────────────
 fn spawn_lighting(commands: &mut Commands) {
-    // Ambient (hemisphere)
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::srgb(1.0, 0.95, 0.85),
@@ -87,7 +171,6 @@ fn spawn_lighting(commands: &mut Commands) {
         ..default()
     });
 
-    // Neon accent
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             color: Color::srgb(0.0, 0.8, 1.0),
@@ -104,19 +187,13 @@ fn spawn_lighting(commands: &mut Commands) {
 // ── Ground ────────────────────────────────────────────────────────────────────
 fn spawn_ground(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
 ) {
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.08, 0.08, 0.10),
-        metallic: 0.6,
-        perceptual_roughness: 0.4,
-        ..default()
-    });
     commands.spawn((
         PbrBundle {
-            mesh: Mesh3d(meshes.add(Cuboid::new(1200.0, 0.5, 1200.0))),
-            material: MeshMaterial3d(mat),
+            mesh:      Mesh3d(meshes.add(Cuboid::new(1200.0, 0.5, 1200.0))),
+            material:  MeshMaterial3d(pal.ground.clone()),
             transform: Transform::from_xyz(0.0, -0.25, 0.0),
             ..default()
         },
@@ -131,24 +208,13 @@ fn spawn_ground(
 // ── Downtown ──────────────────────────────────────────────────────────────────
 fn spawn_downtown(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
-    let colors = [
-        Color::srgb(0.12, 0.14, 0.22),
-        Color::srgb(0.10, 0.12, 0.20),
-        Color::srgb(0.15, 0.16, 0.25),
-        Color::srgb(0.08, 0.10, 0.18),
-    ];
-    let emissives = [
-        Some(Color::srgb(0.0, 0.4, 0.8)),
-        Some(Color::srgb(0.8, 0.2, 0.0)),
-        Some(Color::srgb(0.0, 0.8, 0.4)),
-        None,
-    ];
-
+    let glass = [&pal.downtown_a, &pal.downtown_b, &pal.downtown_c, &pal.downtown_facade];
     let mut rng = rand::thread_rng();
+
     for i in 0..60u64 {
         let x = seeded(seed, i * 3) * 200.0 - 100.0;
         let z = seeded(seed, i * 3 + 1) * 200.0 - 100.0;
@@ -156,19 +222,25 @@ fn spawn_downtown(
         let w = 12.0 + rng.gen_range(0.0f32..18.0);
         let d = 12.0 + rng.gen_range(0.0f32..18.0);
 
-        let ci = (i % 4) as usize;
-        let mat = building_mat(materials, colors[ci], emissives[ci]);
-
+        let mat = glass[(i % 4) as usize].clone();
         spawn_building(commands, meshes, mat, Vec3::new(x, h * 0.5, z), w, h, d, WorldZone::Downtown);
+
+        // Facade accent band near base
+        if i % 3 == 0 {
+            spawn_building(
+                commands, meshes, pal.downtown_facade.clone(),
+                Vec3::new(x, 1.5, z), w + 0.5, 3.0, d + 0.5, WorldZone::Downtown,
+            );
+        }
     }
 }
 
 // ── Industrial ────────────────────────────────────────────────────────────────
 fn spawn_industrial(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
     for i in 0..35u64 {
         let x = 120.0 + seeded(seed, i * 3) * 200.0;
@@ -177,21 +249,23 @@ fn spawn_industrial(
         let w = 20.0 + seeded(seed, i * 4) * 30.0;
         let d = 20.0 + seeded(seed, i * 4 + 1) * 30.0;
 
-        let mat = building_mat(materials, Color::srgb(0.18, 0.14, 0.10), Some(Color::srgb(1.0, 0.3, 0.0)));
-        spawn_building(commands, meshes, mat, Vec3::new(x, h * 0.5, z), w, h, d, WorldZone::Industrial);
+        let body_mat = if i % 2 == 0 { pal.industrial_metal.clone() } else { pal.industrial_rust.clone() };
+        spawn_building(commands, meshes, body_mat, Vec3::new(x, h * 0.5, z), w, h, d, WorldZone::Industrial);
 
         // Chimney
-        let cmat = building_mat(materials, Color::srgb(0.22, 0.18, 0.14), Some(Color::srgb(1.0, 0.5, 0.0)));
-        spawn_building(commands, meshes, cmat, Vec3::new(x + 5.0, h + 10.0, z + 5.0), 3.0, 20.0, 3.0, WorldZone::Industrial);
+        spawn_building(
+            commands, meshes, pal.industrial_rust.clone(),
+            Vec3::new(x + 5.0, h + 10.0, z + 5.0), 3.0, 20.0, 3.0, WorldZone::Industrial,
+        );
     }
 }
 
 // ── Residential ───────────────────────────────────────────────────────────────
 fn spawn_residential(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
     for i in 0..50u64 {
         let x = -120.0 - seeded(seed, i * 3) * 200.0;
@@ -200,7 +274,7 @@ fn spawn_residential(
         let w = 10.0 + seeded(seed, i * 4) * 14.0;
         let d = 8.0 + seeded(seed, i * 4 + 1) * 14.0;
 
-        let mat = building_mat(materials, Color::srgb(0.20, 0.18, 0.15), Some(Color::srgb(0.8, 0.7, 0.0)));
+        let mat = if i % 2 == 0 { pal.residential_a.clone() } else { pal.residential_b.clone() };
         spawn_building(commands, meshes, mat, Vec3::new(x, h * 0.5, z), w, h, d, WorldZone::Residential);
     }
 }
@@ -208,16 +282,14 @@ fn spawn_residential(
 // ── Highways ──────────────────────────────────────────────────────────────────
 fn spawn_highways(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
 ) {
-    let road_mat = building_mat(materials, Color::srgb(0.15, 0.15, 0.18), None);
-
-    // Main east-west highway at z=0
+    // Main east-west highway
     commands.spawn((
         PbrBundle {
-            mesh: Mesh3d(meshes.add(Cuboid::new(1200.0, 0.8, 18.0))),
-            material: MeshMaterial3d(road_mat.clone()),
+            mesh:      Mesh3d(meshes.add(Cuboid::new(1200.0, 0.8, 18.0))),
+            material:  MeshMaterial3d(pal.highway.clone()),
             transform: Transform::from_xyz(0.0, 8.0, 0.0),
             ..default()
         },
@@ -230,8 +302,8 @@ fn spawn_highways(
     // North-south cross
     commands.spawn((
         PbrBundle {
-            mesh: Mesh3d(meshes.add(Cuboid::new(18.0, 0.8, 1200.0))),
-            material: MeshMaterial3d(road_mat.clone()),
+            mesh:      Mesh3d(meshes.add(Cuboid::new(18.0, 0.8, 1200.0))),
+            material:  MeshMaterial3d(pal.highway.clone()),
             transform: Transform::from_xyz(0.0, 6.0, 0.0),
             ..default()
         },
@@ -241,14 +313,13 @@ fn spawn_highways(
         bevy_rapier3d::prelude::Collider::cuboid(9.0, 0.4, 600.0),
     ));
 
-    // Pillars
-    let pillar_mat = building_mat(materials, Color::srgb(0.2, 0.2, 0.25), None);
+    // Support pillars
     for i in -6..=6i32 {
         let x = i as f32 * 100.0;
         commands.spawn((
             PbrBundle {
-                mesh: Mesh3d(meshes.add(Cuboid::new(2.5, 8.0, 2.5))),
-                material: MeshMaterial3d(pillar_mat.clone()),
+                mesh:      Mesh3d(meshes.add(Cuboid::new(2.5, 8.0, 2.5))),
+                material:  MeshMaterial3d(pal.industrial_metal.clone()),
                 transform: Transform::from_xyz(x, 4.0, 0.0),
                 ..default()
             },
@@ -259,30 +330,23 @@ fn spawn_highways(
     }
 }
 
-// ── Sky Platforms ──────────────────────────────────────────────────────────────
+// ── Sky Platforms ─────────────────────────────────────────────────────────────
 fn spawn_sky_platforms(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.1, 0.12, 0.20),
-        emissive: LinearRgba::new(0.0, 0.3, 0.6, 1.0),
-        metallic: 0.5,
-        ..default()
-    });
-
     for i in 0..12u64 {
-        let x = seeded(seed, i * 4) * 600.0 - 300.0;
-        let y = 40.0 + seeded(seed, i * 4 + 1) * 210.0;
-        let z = seeded(seed, i * 4 + 2) * 600.0 - 300.0;
+        let x    = seeded(seed, i * 4) * 600.0 - 300.0;
+        let y    = 40.0 + seeded(seed, i * 4 + 1) * 210.0;
+        let z    = seeded(seed, i * 4 + 2) * 600.0 - 300.0;
         let size = 25.0 + seeded(seed, i * 4 + 3) * 40.0;
 
         commands.spawn((
             PbrBundle {
-                mesh: Mesh3d(meshes.add(Cylinder::new(size, 3.0))),
-                material: MeshMaterial3d(mat.clone()),
+                mesh:      Mesh3d(meshes.add(Cylinder::new(size, 3.0))),
+                material:  MeshMaterial3d(pal.sky_platform.clone()),
                 transform: Transform::from_xyz(x, y, z),
                 ..default()
             },
@@ -299,12 +363,10 @@ fn spawn_sky_platforms(
 // ── Sky Bridges ───────────────────────────────────────────────────────────────
 fn spawn_sky_bridges(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
-    let mat = building_mat(materials, Color::srgb(0.08, 0.10, 0.18), Some(Color::srgb(0.0, 0.5, 1.0)));
-
     for i in 0..8u64 {
         let x = seeded(seed, i * 3) * 400.0 - 200.0;
         let y = 60.0 + seeded(seed, i * 3 + 1) * 100.0;
@@ -312,8 +374,8 @@ fn spawn_sky_bridges(
 
         commands.spawn((
             PbrBundle {
-                mesh: Mesh3d(meshes.add(Cuboid::new(80.0, 1.5, 6.0))),
-                material: MeshMaterial3d(mat.clone()),
+                mesh:      Mesh3d(meshes.add(Cuboid::new(80.0, 1.5, 6.0))),
+                material:  MeshMaterial3d(pal.sky_platform.clone()),
                 transform: Transform::from_xyz(x, y, z),
                 ..default()
             },
@@ -329,27 +391,21 @@ fn spawn_sky_bridges(
 // ── Spaceports ────────────────────────────────────────────────────────────────
 fn spawn_spaceports(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
 ) {
     let positions = [
-        Vec3::new(350.0, 0.5, 350.0),
-        Vec3::new(-350.0, 0.5, 350.0),
-        Vec3::new(350.0, 0.5, -350.0),
+        Vec3::new( 350.0, 0.5,  350.0),
+        Vec3::new(-350.0, 0.5,  350.0),
+        Vec3::new( 350.0, 0.5, -350.0),
         Vec3::new(-350.0, 0.5, -350.0),
     ];
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.12, 0.15, 0.20),
-        metallic: 0.7,
-        emissive: LinearRgba::new(0.0, 0.4, 0.8, 1.0),
-        ..default()
-    });
 
     for pos in positions {
         commands.spawn((
             PbrBundle {
-                mesh: Mesh3d(meshes.add(Cylinder::new(50.0, 2.0))),
-                material: MeshMaterial3d(mat.clone()),
+                mesh:      Mesh3d(meshes.add(Cylinder::new(50.0, 2.0))),
+                material:  MeshMaterial3d(pal.sky_platform.clone()),
                 transform: Transform::from_translation(pos),
                 ..default()
             },
@@ -365,56 +421,42 @@ fn spawn_spaceports(
 // ── Mountains ─────────────────────────────────────────────────────────────────
 fn spawn_mountains(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
-    let rock_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.3, 0.28, 0.25),
-        metallic: 0.1,
-        perceptual_roughness: 0.9,
-        ..default()
-    });
-    let snow_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.9, 0.92, 1.0),
-        metallic: 0.0,
-        perceptual_roughness: 0.8,
-        ..default()
-    });
-
-    // 4 mountain ranges at world corners
     let corners = [
-        Vec3::new(450.0, 0.0, 450.0),
-        Vec3::new(-450.0, 0.0, 450.0),
-        Vec3::new(450.0, 0.0, -450.0),
+        Vec3::new( 450.0, 0.0,  450.0),
+        Vec3::new(-450.0, 0.0,  450.0),
+        Vec3::new( 450.0, 0.0, -450.0),
         Vec3::new(-450.0, 0.0, -450.0),
     ];
 
     for (ci, &corner) in corners.iter().enumerate() {
         for i in 0..15u64 {
             let idx = ci as u64 * 15 + i;
-            let ox = seeded(seed, idx * 3) * 150.0 - 75.0;
-            let oz = seeded(seed, idx * 3 + 1) * 150.0 - 75.0;
-            let h = 40.0 + seeded(seed, idx * 3 + 2) * 120.0;
-            let r = 20.0 + seeded(seed, idx * 4) * 30.0;
+            let ox  = seeded(seed, idx * 3) * 150.0 - 75.0;
+            let oz  = seeded(seed, idx * 3 + 1) * 150.0 - 75.0;
+            let h   = 40.0 + seeded(seed, idx * 3 + 2) * 120.0;
+            let r   = 20.0 + seeded(seed, idx * 4) * 30.0;
             let pos = corner + Vec3::new(ox, h * 0.5, oz);
 
             commands.spawn((
                 PbrBundle {
-                    mesh: Mesh3d(meshes.add(Cone { radius: r, height: h })),
-                    material: MeshMaterial3d(rock_mat.clone()),
+                    mesh:      Mesh3d(meshes.add(Cone { radius: r, height: h })),
+                    material:  MeshMaterial3d(pal.rock.clone()),
                     transform: Transform::from_translation(pos),
                     ..default()
                 },
                 WorldGeometry,
             ));
-            // Snow cap
+
             if h > 80.0 {
                 let snow_pos = corner + Vec3::new(ox, h * 0.92 + 5.0, oz);
                 commands.spawn((
                     PbrBundle {
-                        mesh: Mesh3d(meshes.add(Cone { radius: r * 0.3, height: h * 0.15 })),
-                        material: MeshMaterial3d(snow_mat.clone()),
+                        mesh:      Mesh3d(meshes.add(Cone { radius: r * 0.3, height: h * 0.15 })),
+                        material:  MeshMaterial3d(pal.snow.clone()),
                         transform: Transform::from_translation(snow_pos),
                         ..default()
                     },
@@ -436,9 +478,9 @@ fn spawn_neon_lights(commands: &mut Commands, seed: u64) {
     ];
 
     for i in 0..70u64 {
-        let x = seeded(seed, i * 3) * 600.0 - 300.0;
-        let y = 5.0 + seeded(seed, i * 3 + 1) * 60.0;
-        let z = seeded(seed, i * 3 + 2) * 600.0 - 300.0;
+        let x  = seeded(seed, i * 3) * 600.0 - 300.0;
+        let y  = 5.0 + seeded(seed, i * 3 + 1) * 60.0;
+        let z  = seeded(seed, i * 3 + 2) * 600.0 - 300.0;
         let ci = (i % 5) as usize;
 
         commands.spawn((
@@ -485,34 +527,33 @@ fn spawn_street_lights(commands: &mut Commands, seed: u64) {
 // ── Outer Districts ───────────────────────────────────────────────────────────
 fn spawn_outer_districts(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    seed: u64,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
+    seed:     u64,
 ) {
     let offsets = [
-        Vec3::new(300.0, 0.0, 0.0),
-        Vec3::new(-300.0, 0.0, 0.0),
-        Vec3::new(0.0, 0.0, 300.0),
-        Vec3::new(0.0, 0.0, -300.0),
-        Vec3::new(250.0, 0.0, -250.0),
+        Vec3::new( 300.0, 0.0,    0.0),
+        Vec3::new(-300.0, 0.0,    0.0),
+        Vec3::new(   0.0, 0.0,  300.0),
+        Vec3::new(   0.0, 0.0, -300.0),
+        Vec3::new( 250.0, 0.0, -250.0),
     ];
 
     for (di, &offset) in offsets.iter().enumerate() {
-        let mat = building_mat(
-            materials,
-            Color::srgb(0.12 + di as f32 * 0.02, 0.14, 0.20),
-            Some(Color::srgb(di as f32 * 0.2, 0.4, 0.8)),
-        );
+        let mat = if di % 2 == 0 { pal.residential_a.clone() } else { pal.residential_b.clone() };
+
         for i in 0..20u64 {
             let idx = di as u64 * 20 + i;
-            let ox = seeded(seed, idx * 3) * 120.0 - 60.0;
-            let oz = seeded(seed, idx * 3 + 1) * 120.0 - 60.0;
-            let h = 10.0 + seeded(seed, idx * 3 + 2) * 50.0;
-            let w = 8.0 + seeded(seed, idx * 4) * 15.0;
-            let d = 8.0 + seeded(seed, idx * 4 + 1) * 15.0;
+            let ox  = seeded(seed, idx * 3) * 120.0 - 60.0;
+            let oz  = seeded(seed, idx * 3 + 1) * 120.0 - 60.0;
+            let h   = 10.0 + seeded(seed, idx * 3 + 2) * 50.0;
+            let w   = 8.0 + seeded(seed, idx * 4) * 15.0;
+            let d   = 8.0 + seeded(seed, idx * 4 + 1) * 15.0;
 
-            spawn_building(commands, meshes, mat.clone(),
-                offset + Vec3::new(ox, h * 0.5, oz), w, h, d, WorldZone::OuterDistrict);
+            spawn_building(
+                commands, meshes, mat.clone(),
+                offset + Vec3::new(ox, h * 0.5, oz), w, h, d, WorldZone::OuterDistrict,
+            );
         }
     }
 }
@@ -520,26 +561,17 @@ fn spawn_outer_districts(
 // ── River ─────────────────────────────────────────────────────────────────────
 fn spawn_river(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    meshes:   &mut Assets<Mesh>,
+    pal:      &Palette,
 ) {
-    let water_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.0, 0.2, 0.4, 0.8),
-        metallic: 0.9,
-        perceptual_roughness: 0.1,
-        alpha_mode: AlphaMode::Blend,
-        emissive: LinearRgba::new(0.0, 0.1, 0.3, 1.0),
-        ..default()
-    });
-
-    // Sinusoidal river approximated with segments
     for i in -15..=15i32 {
         let z = i as f32 * 40.0;
         let x = (z * 0.05).sin() * 60.0;
+
         commands.spawn((
             PbrBundle {
-                mesh: Mesh3d(meshes.add(Cuboid::new(25.0, 0.1, 42.0))),
-                material: MeshMaterial3d(water_mat.clone()),
+                mesh:      Mesh3d(meshes.add(Cuboid::new(25.0, 0.1, 42.0))),
+                material:  MeshMaterial3d(pal.water.clone()),
                 transform: Transform::from_xyz(x, -0.1, z),
                 ..default()
             },
@@ -548,21 +580,75 @@ fn spawn_river(
     }
 }
 
+// ── Trees ─────────────────────────────────────────────────────────────────────
+fn spawn_trees(
+    commands: &mut Commands,
+    meshes:   &mut Assets<Mesh>,
+    mats:     &mut Assets<StandardMaterial>,
+    seed:     u64,
+) {
+    // Build one template per species (L-system evaluated once, materials allocated once).
+    let oak   = TreeTemplate::new(TreeKind::Oak,   mats);
+    let pine  = TreeTemplate::new(TreeKind::Pine,  mats);
+    let dead  = TreeTemplate::new(TreeKind::Dead,  mats);
+    let cyber = TreeTemplate::new(TreeKind::Cyber, mats);
+
+    // (zone_offset, count, template_ref, scale_base, scale_range)
+    struct Placement<'a> {
+        offset:      Vec3,
+        spread:      f32,
+        count:       u64,
+        template:    &'a TreeTemplate,
+        scale_base:  f32,
+        scale_range: f32,
+    }
+
+    let placements = [
+        // Oak — residential west, scattered at ground level
+        Placement { offset: Vec3::new(-150.0, 0.0,   0.0), spread: 140.0, count: 12, template: &oak,   scale_base: 0.9, scale_range: 0.6 },
+        // Oak — outer district north
+        Placement { offset: Vec3::new(   0.0, 0.0, 250.0), spread: 100.0, count:  8, template: &oak,   scale_base: 0.7, scale_range: 0.5 },
+        // Pine — near mountain corners (NE)
+        Placement { offset: Vec3::new( 320.0, 0.0, 320.0), spread:  80.0, count:  8, template: &pine,  scale_base: 1.0, scale_range: 0.8 },
+        // Pine — mountain corner SW
+        Placement { offset: Vec3::new(-320.0, 0.0,-320.0), spread:  80.0, count:  8, template: &pine,  scale_base: 1.0, scale_range: 0.8 },
+        // Dead — industrial zone east, gaunt silhouettes
+        Placement { offset: Vec3::new( 200.0, 0.0,   0.0), spread: 100.0, count:  6, template: &dead,  scale_base: 0.8, scale_range: 0.4 },
+        // Cyber — downtown fringe, neon accent trees
+        Placement { offset: Vec3::new(  60.0, 0.0,  60.0), spread:  60.0, count:  6, template: &cyber, scale_base: 0.6, scale_range: 0.4 },
+    ];
+
+    let mut idx = 0u64;
+    for p in &placements {
+        for i in 0..p.count {
+            let ox  = (seeded(seed, idx * 4    ) - 0.5) * 2.0 * p.spread;
+            let oz  = (seeded(seed, idx * 4 + 1) - 0.5) * 2.0 * p.spread;
+            let rot = seeded(seed, idx * 4 + 2) * std::f32::consts::TAU;
+            let sc  = p.scale_base + seeded(seed, idx * 4 + 3) * p.scale_range;
+            let pos = p.offset + Vec3::new(ox, 0.0, oz);
+
+            spawn_tree(commands, meshes, p.template, pos, rot, sc);
+            idx += 1;
+        }
+        idx += 100; // separate seed regions between placement groups
+    }
+}
+
 // ── Building helper ───────────────────────────────────────────────────────────
 fn spawn_building(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    mat: Handle<StandardMaterial>,
-    position: Vec3,
-    width: f32,
-    height: f32,
-    depth: f32,
-    zone: WorldZone,
+    commands:  &mut Commands,
+    meshes:    &mut Assets<Mesh>,
+    mat:       Handle<StandardMaterial>,
+    position:  Vec3,
+    width:     f32,
+    height:    f32,
+    depth:     f32,
+    zone:      WorldZone,
 ) {
     commands.spawn((
         PbrBundle {
-            mesh: Mesh3d(meshes.add(Cuboid::new(width, height, depth))),
-            material: MeshMaterial3d(mat),
+            mesh:      Mesh3d(meshes.add(Cuboid::new(width, height, depth))),
+            material:  MeshMaterial3d(mat),
             transform: Transform::from_translation(position),
             ..default()
         },

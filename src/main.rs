@@ -10,6 +10,7 @@ mod components;
 mod robots;
 mod chapters;
 mod perks;
+mod lsystem;
 mod plugins;
 
 use state::AppState;

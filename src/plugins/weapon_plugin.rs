@@ -182,8 +182,11 @@ fn weapon_fire_system(
     for _ in 0..pellets {
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let sx = rng.gen_range(-spread..spread);
-        let sy = rng.gen_range(-spread..spread);
+        let (sx, sy) = if spread > 0.0 {
+            (rng.gen_range(-spread..spread), rng.gen_range(-spread..spread))
+        } else {
+            (0.0, 0.0)
+        };
         let dir = (forward + right * sx + up * sy).normalize();
 
         commands.spawn((
