@@ -8,6 +8,8 @@ mod damage;
 mod resources;
 mod components;
 mod robots;
+mod chapters;
+mod perks;
 mod plugins;
 
 use state::AppState;
@@ -23,6 +25,11 @@ use plugins::{
     CraftingPlugin,
     UiPlugin,
     SavePlugin,
+    ChapterPlugin,
+    DiscoverablePlugin,
+    RadioPlugin,
+    VehiclePlugin,
+    ChassisEditorPlugin,
 };
 use resources::{WaveInfo, GameSettings, PlayerScore, CameraShake};
 
@@ -33,7 +40,7 @@ fn main() {
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Detroit 3026".to_string(),
+                        title: "Heavy Water".to_string(),
                         resolution: WindowResolution::new(1280.0, 720.0),
                         ..default()
                     }),
@@ -64,6 +71,13 @@ fn main() {
             ArmorPlugin,
             CraftingPlugin,
             SavePlugin,
+        ))
+        .add_plugins((
+            ChapterPlugin,
+            DiscoverablePlugin,
+            RadioPlugin,
+            VehiclePlugin,
+            ChassisEditorPlugin,
         ))
         .run();
 }

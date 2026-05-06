@@ -5,6 +5,9 @@ pub mod armor;
 pub mod inventory;
 pub mod companion;
 pub mod world;
+pub mod faction;
+pub mod discoverable;
+pub mod mods;
 
 pub use player::*;
 pub use enemy::*;
@@ -13,3 +16,6 @@ pub use armor::*;
 pub use inventory::*;
 pub use companion::*;
 pub use world::*;
+pub use faction::*;
+pub use discoverable::*;
+pub use mods::*;

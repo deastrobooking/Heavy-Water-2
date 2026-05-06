@@ -1,11 +1,11 @@
 [package]
-name = "detroit-3026"
-version = "0.1.0"
+name = "heavy-water"
+version = "0.2.0"
 edition = "2021"
-description = "Detroit 3026 – Open World Action RPG (Bevy Engine)"
+description = "Heavy Water – Story-driven Action RPG (Bevy Engine)"
 
 [[bin]]
-name = "detroit-3026"
+name = "heavy-water"
 path = "src/main.rs"
 
 [dependencies]

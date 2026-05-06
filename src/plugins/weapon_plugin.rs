@@ -670,10 +670,12 @@ fn beam_sabre_update_system(
 
     // Toggle on T press
     if keyboard.just_pressed(KeyCode::KeyT) {
+        if !sabre.unlocked { return; }
         sabre.active = !sabre.active;
         return; // Don't attack the same frame we toggle
     }
 
+    if !sabre.unlocked { return; }
     if !sabre.active { return; }
 
     sabre.cooldown_timer = (sabre.cooldown_timer - dt).max(0.0);

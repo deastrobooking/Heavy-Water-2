@@ -210,6 +210,8 @@ impl Default for SpecialWeaponInventory {
 #[derive(Component, Debug, Clone)]
 pub struct BeamSabre {
     pub active: bool,
+    /// Heavy Water: Beam Sabre is locked until the Ch.1 discoverable is collected.
+    pub unlocked: bool,
     pub level: u32,
     pub slash_damage: f32,
     pub wave_damage: f32,
@@ -221,10 +223,15 @@ pub struct BeamSabre {
     pub is_slashing: bool,
 }
 
+/// Marker on the player while the Beam Sabre has not been discovered yet.
+#[derive(Component, Debug, Default)]
+pub struct BeamSabreLocked;
+
 impl Default for BeamSabre {
     fn default() -> Self {
         Self {
             active: false,
+            unlocked: false,
             level: 1,
             slash_damage: 25.0,
             wave_damage: 40.0,

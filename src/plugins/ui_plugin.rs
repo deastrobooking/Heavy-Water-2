@@ -7,7 +7,8 @@ use crate::components::weapon::{WeaponInventory, SpecialWeaponInventory, BeamSab
 use crate::components::armor::ArmorSet;
 use crate::components::inventory::Inventory;
 use crate::damage::Health;
-use crate::resources::{WaveInfo, UiMessage};
+use crate::resources::{WaveInfo, UiMessage, CurrentChapter, ChapterProgress};
+use crate::chapters::{all_chapters, ChapterId};
 use crate::plugins::crafting_plugin::{all_recipes, start_craft, CraftingQueue};
 
 pub struct UiPlugin;
@@ -18,6 +19,8 @@ impl Plugin for UiPlugin {
             .init_resource::<UiMessage>()
             .init_resource::<CraftingPanelState>()
             .add_systems(OnEnter(AppState::MainMenu), setup_main_menu)
+            .add_systems(OnEnter(AppState::ChapterSelect), setup_chapter_select)
+            .add_systems(OnExit(AppState::ChapterSelect), despawn_chapter_select)
             .add_systems(OnEnter(AppState::Playing), (setup_hud, despawn_menu))
             .add_systems(OnEnter(AppState::GameOver), setup_game_over)
             .add_systems(
@@ -33,7 +36,8 @@ impl Plugin for UiPlugin {
                 )
                     .run_if(in_state(AppState::Playing).or(in_state(AppState::GameOver))),
             )
-            .add_systems(Update, menu_start_button.run_if(in_state(AppState::MainMenu)));
+            .add_systems(Update, menu_start_button.run_if(in_state(AppState::MainMenu)))
+            .add_systems(Update, chapter_select_input.run_if(in_state(AppState::ChapterSelect)));
     }
 }
 
@@ -82,8 +86,8 @@ fn setup_main_menu(mut commands: Commands) {
         BackgroundColor(Color::srgba(0.01, 0.01, 0.05, 1.0)),
         MainMenuRoot,
     )).with_children(|p| {
-        p.spawn((Text::new("DETROIT 3026"), TextFont { font_size: 72.0, ..default() }, TextColor(Color::srgb(0.0, 0.8, 1.0))));
-        p.spawn((Text::new("Open World Action RPG"), TextFont { font_size: 24.0, ..default() }, TextColor(Color::srgb(0.6, 0.6, 0.8))));
+        p.spawn((Text::new("HEAVY WATER"), TextFont { font_size: 72.0, ..default() }, TextColor(Color::srgb(0.0, 0.8, 1.0))));
+        p.spawn((Text::new("Synthetic. Mechanoid. Insectoid. Swarm."), TextFont { font_size: 24.0, ..default() }, TextColor(Color::srgb(0.6, 0.6, 0.8))));
         p.spawn(Node { height: Val::Px(40.0), ..default() });
         p.spawn((
             Button,
@@ -91,11 +95,11 @@ fn setup_main_menu(mut commands: Commands) {
             BackgroundColor(Color::srgb(0.0, 0.4, 0.8)),
             StartButton,
         )).with_children(|btn| {
-            btn.spawn((Text::new("START MISSION"), TextFont { font_size: 28.0, ..default() }, TextColor(Color::WHITE)));
+            btn.spawn((Text::new("BEGIN CHAPTER"), TextFont { font_size: 28.0, ..default() }, TextColor(Color::WHITE)));
         });
         p.spawn(Node { height: Val::Px(30.0), ..default() });
         p.spawn((
-            Text::new("WASD Move  |  Mouse Look  |  LMB Fire  |  V/B Melee  |  T Beam Sabre (LMB to slash)\n7/8/9/0 Special  |  F Parry  |  Q Dodge  |  Space Jump/Jetpack  |  C Crafting"),
+            Text::new("WASD Move  |  Mouse Look  |  LMB Fire  |  V/B Melee  |  T Beam Sabre  |  M Motorcycle  |  J Jet\n7/8/9/0 Special  |  F Parry  |  Q Dodge  |  Space Jump/Jetpack  |  C Crafting"),
             TextFont { font_size: 14.0, ..default() }, TextColor(Color::srgb(0.5, 0.5, 0.7)),
         ));
     });
@@ -107,8 +111,91 @@ fn menu_start_button(
 ) {
     for interaction in interaction_q.iter() {
         if *interaction == Interaction::Pressed {
+            next_state.set(AppState::ChapterSelect);
+        }
+    }
+}
+
+// ── Chapter Select ────────────────────────────────────────────────────────────
+#[derive(Component)] struct ChapterSelectRoot;
+
+fn setup_chapter_select(mut commands: Commands, progress: Res<ChapterProgress>) {
+    let chapters = all_chapters();
+    commands.spawn((
+        Node {
+            width: Val::Percent(100.0), height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart,
+            padding: UiRect::all(Val::Px(40.0)),
+            row_gap: Val::Px(6.0),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.02, 0.02, 0.06, 1.0)),
+        ChapterSelectRoot,
+    )).with_children(|p| {
+        p.spawn((Text::new("SELECT CHAPTER"),
+            TextFont { font_size: 48.0, ..default() },
+            TextColor(Color::srgb(0.4, 0.85, 1.0))));
+        p.spawn((Text::new("Press 1-9 / 0 / Q W E R for chapters 1-14   |   [E]ditor   [Esc] Back"),
+            TextFont { font_size: 18.0, ..default() },
+            TextColor(Color::srgb(0.7, 0.7, 0.85))));
+        p.spawn(Node { height: Val::Px(20.0), ..default() });
+        for ch in &chapters {
+            let unlocked = progress.is_unlocked(ch.id);
+            let done = progress.completed.contains(&ch.id.0);
+            let prefix = if done { "[✓]" } else if unlocked { "[ ]" } else { "[X]" };
+            let color = if done { Color::srgb(0.4, 1.0, 0.4) }
+                else if unlocked { Color::WHITE }
+                else { Color::srgb(0.4, 0.4, 0.4) };
+            p.spawn((
+                Text::new(format!("{} Ch.{:02} — {}    ({})",
+                    prefix, ch.id.0, ch.title, ch.subtitle)),
+                TextFont { font_size: 18.0, ..default() },
+                TextColor(color),
+            ));
+        }
+    });
+}
+
+fn despawn_chapter_select(mut commands: Commands, q: Query<Entity, With<ChapterSelectRoot>>) {
+    for e in q.iter() { commands.entity(e).despawn_recursive(); }
+}
+
+fn chapter_select_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    progress: Res<ChapterProgress>,
+    mut current: ResMut<CurrentChapter>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    let try_pick = |k: KeyCode, n: u8| -> Option<u8> {
+        if keyboard.just_pressed(k) { Some(n) } else { None }
+    };
+    let pick = try_pick(KeyCode::Digit1, 1)
+        .or_else(|| try_pick(KeyCode::Digit2, 2))
+        .or_else(|| try_pick(KeyCode::Digit3, 3))
+        .or_else(|| try_pick(KeyCode::Digit4, 4))
+        .or_else(|| try_pick(KeyCode::Digit5, 5))
+        .or_else(|| try_pick(KeyCode::Digit6, 6))
+        .or_else(|| try_pick(KeyCode::Digit7, 7))
+        .or_else(|| try_pick(KeyCode::Digit8, 8))
+        .or_else(|| try_pick(KeyCode::Digit9, 9))
+        .or_else(|| try_pick(KeyCode::Digit0, 10))
+        .or_else(|| try_pick(KeyCode::KeyQ, 11))
+        .or_else(|| try_pick(KeyCode::KeyW, 12))
+        .or_else(|| try_pick(KeyCode::KeyR, 13))
+        .or_else(|| try_pick(KeyCode::KeyT, 14));
+    if let Some(n) = pick {
+        if progress.is_unlocked(ChapterId(n)) {
+            current.id = ChapterId(n);
+            current.started = false;
             next_state.set(AppState::Playing);
         }
+    }
+    if keyboard.just_pressed(KeyCode::KeyE) {
+        next_state.set(AppState::ChassisEditor);
+    }
+    if keyboard.just_pressed(KeyCode::Escape) {
+        next_state.set(AppState::MainMenu);
     }
 }
 
@@ -273,7 +360,9 @@ fn hud_update_system(
     if let Ok(mut t) = credits_q.get_single_mut() { *t = Text::new(format!("¢ {}", stats.credits)); }
     if let Ok(mut t) = level_q.get_single_mut()   { *t = Text::new(format!("LVL {}  XP {}/{}", stats.level, stats.experience, stats.xp_for_next_level())); }
     if let Ok(mut t) = elem_q.get_single_mut()    { *t = Text::new(format!("Element: {}", armor.active_element.display_name())); }
-    if let Ok(mut t) = wave_q.get_single_mut()    { *t = Text::new(format!("Wave {}", wave.wave_number)); }
+    if let Ok(mut t) = wave_q.get_single_mut()    {
+        *t = Text::new(format!("Ch.{:02}  W{}", wave.wave_number, wave.wave_number));
+    }
     if let Ok(mut t) = enm_q.get_single_mut()     { *t = Text::new(format!("Enemies: {}", wave.enemy_count)); }
 
     let weapon = weapons.active();

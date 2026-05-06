@@ -131,6 +131,47 @@ pub struct UiDamageNumberEvent {
     pub is_critical: bool,
 }
 
+// ── Heavy Water — Chapters / Discoverables ────────────────────────────────────
+#[derive(Event, Debug)]
+pub struct ChapterStartedEvent {
+    pub chapter: u8,
+}
+
+#[derive(Event, Debug)]
+pub struct EncounterStepAdvancedEvent {
+    pub step_index: usize,
+}
+
+#[derive(Event, Debug)]
+pub struct ChapterCompletedEvent {
+    pub chapter: u8,
+}
+
+#[derive(Event, Debug)]
+pub struct BossDefeatedEvent {
+    pub name: String,
+    pub chapter: u8,
+}
+
+#[derive(Event, Debug)]
+pub struct DiscoverableCollectedEvent {
+    pub kind_label: String,
+    pub raw_id: String,
+}
+
+#[derive(Event, Debug)]
+pub struct CompanionRecruitedEvent {
+    pub name: String,
+}
+
+#[derive(Event, Debug)]
+pub struct RadioChatterEvent {
+    pub speaker: String,
+    pub text: String,
+    pub faction: crate::components::faction::Faction,
+    pub duration: f32,
+}
+
 // ── Plugin registration ───────────────────────────────────────────────────────
 pub struct EventsPlugin;
 
@@ -169,6 +210,14 @@ impl Plugin for EventsPlugin {
             .add_event::<BossSpawnedEvent>()
             // UI
             .add_event::<UiMessageEvent>()
-            .add_event::<UiDamageNumberEvent>();
+            .add_event::<UiDamageNumberEvent>()
+            // Heavy Water
+            .add_event::<ChapterStartedEvent>()
+            .add_event::<EncounterStepAdvancedEvent>()
+            .add_event::<ChapterCompletedEvent>()
+            .add_event::<BossDefeatedEvent>()
+            .add_event::<DiscoverableCollectedEvent>()
+            .add_event::<CompanionRecruitedEvent>()
+            .add_event::<RadioChatterEvent>();
     }
 }

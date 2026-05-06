@@ -5,6 +5,8 @@ use bevy::prelude::*;
 pub enum AppState {
     #[default]
     MainMenu,
+    ChapterSelect,
+    ChassisEditor,
     Playing,
     Paused,
     GameOver,

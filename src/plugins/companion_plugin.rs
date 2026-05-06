@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::state::AppState;
-use crate::events::{PlayerHealedEvent, EnemyDamagedEvent, EnemyKilledEvent};
+use crate::events::{PlayerHealedEvent, EnemyDamagedEvent, EnemyKilledEvent, CompanionRecruitedEvent};
 use crate::plugins::weapon_plugin::ProjectileAssets;
 use crate::components::player::Player;
 use crate::components::companion::*;
@@ -22,6 +22,7 @@ impl Plugin for CompanionPlugin {
                     companion_combat_system,
                     companion_heal_system,
                     companion_projectile_system,
+                    recruit_companion_system,
                 )
                     .run_if(in_state(AppState::Playing)),
             );
@@ -225,5 +226,24 @@ fn companion_projectile_system(
         if hit {
             commands.entity(entity).despawn_recursive();
         }
+    }
+}
+
+// ── Recruit Listener ──────────────────────────────────────────────────────────
+fn recruit_companion_system(
+    mut events: EventReader<CompanionRecruitedEvent>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    player_q: Query<&Transform, With<Player>>,
+) {
+    let Ok(pt) = player_q.get_single() else { return };
+    for ev in events.read() {
+        let pos = pt.translation + Vec3::new(2.0, 0.0, 2.0);
+        spawn_companion_entity(
+            &mut commands, &mut meshes, &mut materials,
+            Companion::ally(ev.name.clone()),
+            pos,
+        );
     }
 }

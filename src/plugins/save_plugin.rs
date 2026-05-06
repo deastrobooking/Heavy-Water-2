@@ -9,7 +9,7 @@ use crate::components::player::{Player, PlayerStats};
 use crate::damage::Health;
 use crate::resources::WaveInfo;
 
-const SAVE_FILE: &str = "detroit3026_save.json";
+const SAVE_FILE: &str = "heavy_water_save.json";
 
 // ── Save Data ─────────────────────────────────────────────────────────────────
 #[derive(Serialize, Deserialize, Debug, Clone)]
