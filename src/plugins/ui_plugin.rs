@@ -18,10 +18,11 @@ impl Plugin for UiPlugin {
         app
             .init_resource::<UiMessage>()
             .init_resource::<CraftingPanelState>()
+            .add_systems(Startup, spawn_menu_camera)
             .add_systems(OnEnter(AppState::MainMenu), setup_main_menu)
             .add_systems(OnEnter(AppState::ChapterSelect), setup_chapter_select)
             .add_systems(OnExit(AppState::ChapterSelect), despawn_chapter_select)
-            .add_systems(OnEnter(AppState::Playing), (setup_hud, despawn_menu))
+            .add_systems(OnEnter(AppState::Playing), (setup_hud, despawn_menu, despawn_menu_camera))
             .add_systems(OnEnter(AppState::GameOver), setup_game_over)
             .add_systems(
                 Update,
@@ -42,6 +43,7 @@ impl Plugin for UiPlugin {
 }
 
 // ── Marker Components ─────────────────────────────────────────────────────────
+#[derive(Component)] struct MenuCamera;
 #[derive(Component)] struct MainMenuRoot;
 #[derive(Component)] struct HudRoot;
 #[derive(Component)] struct GameOverRoot;
@@ -68,6 +70,18 @@ impl Plugin for UiPlugin {
 #[derive(Resource, Default)]
 struct CraftingPanelState {
     visible: bool,
+}
+
+// ── Menu Camera ───────────────────────────────────────────────────────────────
+fn spawn_menu_camera(mut commands: Commands) {
+    commands.spawn((
+        Camera3dBundle::default(),
+        MenuCamera,
+    ));
+}
+
+fn despawn_menu_camera(mut commands: Commands, q: Query<Entity, With<MenuCamera>>) {
+    for e in q.iter() { commands.entity(e).despawn_recursive(); }
 }
 
 // ── Menu Setup ────────────────────────────────────────────────────────────────
