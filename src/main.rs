@@ -16,6 +16,7 @@ mod plugins;
 use state::AppState;
 use events::EventsPlugin;
 use plugins::{
+    InputPlugin,
     PlayerPlugin,
     WeaponPlugin,
     EnemyPlugin,
@@ -62,6 +63,7 @@ fn main() {
         .add_plugins(EventsPlugin)
         // Game plugins
         .add_plugins((
+            InputPlugin,
             UiPlugin,
             WorldPlugin,
             PlayerPlugin,

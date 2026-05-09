@@ -7,6 +7,7 @@ use crate::state::AppState;
 use crate::events::UiMessageEvent;
 use crate::components::player::{Player, PlayerMovement, JetpackState};
 use crate::components::mods::PlayerLoadout;
+use crate::plugins::input_plugin::GameInput;
 
 pub struct VehiclePlugin;
 
@@ -29,12 +30,12 @@ pub struct VehicleState {
 }
 
 fn vehicle_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:      Res<GameInput>,
     loadout: Res<PlayerLoadout>,
     mut state: ResMut<VehicleState>,
     mut msg_ev: EventWriter<UiMessageEvent>,
 ) {
-    if keyboard.just_pressed(KeyCode::KeyM) {
+    if gi.open_map {
         if loadout.has_blueprint("motorcycle_blueprint") {
             state.motorcycle_active = !state.motorcycle_active;
             if state.motorcycle_active { state.jet_active = false; }
@@ -46,7 +47,7 @@ fn vehicle_input(
             msg_ev.send(UiMessageEvent { text: "Motorcycle blueprint required.".into(), duration: 2.0 });
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyJ) {
+    if gi.enter_vehicle {
         if loadout.has_blueprint("jet_blueprint") {
             state.jet_active = !state.jet_active;
             if state.jet_active { state.motorcycle_active = false; }

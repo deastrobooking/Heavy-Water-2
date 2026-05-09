@@ -1,16 +1,16 @@
 use bevy::prelude::*;
-use bevy::input::mouse::MouseMotion;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_rapier3d::prelude::*;
 
 use crate::state::AppState;
 use crate::events::*;
-use crate::damage::{Health, Damageable, DamageInfo, DamageType, apply_damage};
+use crate::damage::{Health, Damageable, DamageInfo, apply_damage};
 use crate::components::player::*;
 use crate::components::weapon::*;
 use crate::components::armor::ArmorSet;
 use crate::components::inventory::Inventory;
 use crate::resources::{GameSettings, CameraShake};
+use crate::plugins::input_plugin::GameInput;
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
 pub struct PlayerPlugin;
@@ -123,25 +123,19 @@ fn release_cursor(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
 
 // ── Mouse Look ────────────────────────────────────────────────────────────────
 fn player_look(
-    settings: Res<GameSettings>,
-    mut mouse_events: EventReader<MouseMotion>,
+    gi:         Res<GameInput>,
     mut player_q: Query<&mut Transform, (With<Player>, Without<PlayerCamera>)>,
     mut cam_q: Query<(&mut Transform, &mut CameraPitch), (With<PlayerCamera>, Without<Player>)>,
 ) {
-    let mut delta = Vec2::ZERO;
-    for ev in mouse_events.read() {
-        delta += ev.delta;
-    }
+    let delta = gi.look_delta;
     if delta == Vec2::ZERO { return; }
 
-    let sens = settings.mouse_sensitivity;
-
     if let Ok(mut pt) = player_q.get_single_mut() {
-        pt.rotate_y(-delta.x * sens);
+        pt.rotate_y(-delta.x);
     }
 
     if let Ok((mut ct, mut pitch)) = cam_q.get_single_mut() {
-        pitch.0 = (pitch.0 - delta.y * sens)
+        pitch.0 = (pitch.0 - delta.y)
             .clamp(-std::f32::consts::FRAC_PI_2 * 0.9, std::f32::consts::FRAC_PI_2 * 0.9);
         ct.rotation = Quat::from_rotation_x(pitch.0);
     }
@@ -179,7 +173,7 @@ fn camera_shake_system(
 
 // ── Movement & Physics ────────────────────────────────────────────────────────
 fn player_movement(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut player_q: Query<
         (
@@ -209,39 +203,32 @@ fn player_movement(
 
     movement.is_grounded = output.grounded;
 
-    // Regenerate jetpack fuel when grounded
     if movement.is_grounded {
         jetpack.fuel = (jetpack.fuel + jetpack.regen_rate * dt).min(jetpack.max_fuel);
-        movement.velocity.y = movement.velocity.y.max(0.0); // reset fall
+        movement.velocity.y = movement.velocity.y.max(0.0);
     }
 
-    // Horizontal input
-    let fwd = transform.forward().as_vec3().with_y(0.0).normalize_or_zero();
+    // Horizontal input — left stick axes map to world fwd/right
+    let fwd   = transform.forward().as_vec3().with_y(0.0).normalize_or_zero();
     let right = transform.right().as_vec3().with_y(0.0).normalize_or_zero();
-    let mut input = Vec3::ZERO;
-    if keyboard.pressed(KeyCode::KeyW) { input += fwd; }
-    if keyboard.pressed(KeyCode::KeyS) { input -= fwd; }
-    if keyboard.pressed(KeyCode::KeyA) { input -= right; }
-    if keyboard.pressed(KeyCode::KeyD) { input += right; }
-    let input = input.normalize_or_zero();
+    let input = (fwd * gi.move_axis.y + right * gi.move_axis.x).normalize_or_zero();
 
-    let sprinting = keyboard.pressed(KeyCode::ShiftLeft) && stats.stamina > 0.0 && input.length_squared() > 0.0;
+    let sprinting = gi.sprint && stats.stamina > 0.0 && input.length_squared() > 0.0;
     let speed = if sprinting { movement.sprint_speed } else { movement.walk_speed };
 
-    // Drain stamina while sprinting
     if sprinting {
         stats.stamina = (stats.stamina - 15.0 * dt).max(0.0);
     }
 
     // Jump
-    if keyboard.just_pressed(KeyCode::Space) && movement.is_grounded {
+    if gi.jump && movement.is_grounded {
         movement.velocity.y = movement.jump_force;
         movement.is_grounded = false;
         state.transition(PlayerState::Jetpack);
     }
 
-    // Jetpack (hold Space while airborne)
-    if keyboard.pressed(KeyCode::Space) && !movement.is_grounded && jetpack.fuel > 0.0 {
+    // Jetpack (hold jump while airborne)
+    if gi.jetpack && !movement.is_grounded && jetpack.fuel > 0.0 {
         movement.velocity.y = (movement.velocity.y + jetpack.force).min(jetpack.max_vertical_vel);
         jetpack.fuel -= jetpack.fuel_cost_per_sec * dt;
         jetpack.fuel = jetpack.fuel.max(0.0);
@@ -291,7 +278,7 @@ fn player_movement(
 
 // ── Dodge Update ──────────────────────────────────────────────────────────────
 fn player_dodge_update(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut player_q: Query<
         (&mut DodgeState, &mut PlayerStats, &mut Damageable, &Transform, &mut PlayerStateMachine),
@@ -314,15 +301,14 @@ fn player_dodge_update(
         }
     }
 
-    // Trigger dodge
-    if keyboard.just_pressed(KeyCode::KeyQ)
+    if gi.dodge
         && !dodge.is_dodging
         && dodge.cooldown_timer <= 0.0
         && stats.stamina >= dodge.dodge_cost
         && state.current != PlayerState::Dead
     {
         let fwd = transform.forward().as_vec3().with_y(0.0).normalize_or_zero();
-        dodge.dodge_direction = if fwd.length_squared() > 0.0 { -fwd } else { -fwd };
+        dodge.dodge_direction = -fwd;
         dodge.is_dodging = true;
         dodge.dodge_timer = dodge.dodge_duration;
         dodge.cooldown_timer = dodge.dodge_cooldown;
@@ -334,7 +320,7 @@ fn player_dodge_update(
 
 // ── Parry Update ──────────────────────────────────────────────────────────────
 fn player_parry_update(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut player_q: Query<(&mut ParryState, &mut PlayerStateMachine), With<Player>>,
 ) {
@@ -350,7 +336,7 @@ fn player_parry_update(
         }
     }
 
-    if keyboard.just_pressed(KeyCode::KeyF)
+    if gi.parry
         && !parry.is_parrying
         && parry.cooldown_timer <= 0.0
         && state.current != PlayerState::Dead

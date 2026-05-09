@@ -1,3 +1,4 @@
+pub mod input_plugin;
 pub mod player_plugin;
 pub mod weapon_plugin;
 pub mod enemy_plugin;
@@ -14,6 +15,8 @@ pub mod radio_plugin;
 pub mod vehicle_plugin;
 pub mod chassis_editor_plugin;
 
+pub use input_plugin::InputPlugin;
+pub use input_plugin::GameInput;
 pub use player_plugin::PlayerPlugin;
 pub use weapon_plugin::WeaponPlugin;
 pub use enemy_plugin::EnemyPlugin;

@@ -6,6 +6,7 @@ use crate::components::player::*;
 use crate::components::weapon::*;
 use crate::components::enemy::Enemy;
 use crate::damage::{Health, Damageable, DamageInfo, DamageType, apply_damage, area_damage_falloff};
+use crate::plugins::input_plugin::GameInput;
 
 // ── Hit Particle ──────────────────────────────────────────────────────────────
 #[derive(Component)]
@@ -105,33 +106,41 @@ fn setup_weapon_assets(
 
 // ── Weapon Select ─────────────────────────────────────────────────────────────
 fn weapon_select_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:       Res<GameInput>,
     mut player_q: Query<&mut WeaponInventory, With<Player>>,
     mut switched_ev: EventWriter<WeaponSwitchedEvent>,
 ) {
     let Ok(mut inv) = player_q.get_single_mut() else { return };
-    let prev = inv.active_slot;
-    let slot = if keyboard.just_pressed(KeyCode::Digit1) { Some(0) }
-        else if keyboard.just_pressed(KeyCode::Digit2) { Some(1) }
-        else if keyboard.just_pressed(KeyCode::Digit3) { Some(2) }
-        else if keyboard.just_pressed(KeyCode::Digit4) { Some(3) }
-        else if keyboard.just_pressed(KeyCode::Digit5) { Some(4) }
-        else if keyboard.just_pressed(KeyCode::Digit6) { Some(5) }
-        else { None };
+    let prev  = inv.active_slot;
+    let count = inv.slots.len();
 
-    if let Some(s) = slot {
-        inv.active_slot = s;
-        if s != prev {
-            switched_ev.send(WeaponSwitchedEvent {
-                weapon_name: inv.active().weapon_type.display_name().to_string(),
-            });
+    // Direct slot via number keys.
+    let mut new_slot = gi.weapon_slot;
+
+    // Cycle forward / backward via bumpers or bracket keys.
+    if gi.weapon_next {
+        new_slot = Some((prev + 1) % count);
+    } else if gi.weapon_prev && prev > 0 {
+        new_slot = Some(prev - 1);
+    } else if gi.weapon_prev && prev == 0 {
+        new_slot = Some(count - 1);
+    }
+
+    if let Some(s) = new_slot {
+        if s < count {
+            inv.active_slot = s;
+            if s != prev {
+                switched_ev.send(WeaponSwitchedEvent {
+                    weapon_name: inv.active().weapon_type.display_name().to_string(),
+                });
+            }
         }
     }
 }
 
 // ── Primary Weapon Fire ───────────────────────────────────────────────────────
 fn weapon_fire_system(
-    mouse: Res<ButtonInput<MouseButton>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut commands: Commands,
     proj_assets: Res<ProjectileAssets>,
@@ -143,8 +152,8 @@ fn weapon_fire_system(
     let Ok((mut inv, mut sm)) = player_q.get_single_mut() else { return };
     let Ok(cam) = cam_q.get_single() else { return };
 
-    let firing = mouse.pressed(MouseButton::Left);
-    let just_fired = mouse.just_pressed(MouseButton::Left);
+    let firing     = gi.fire;
+    let just_fired = gi.fire_just;
 
     // Don't fire primary weapons while beam sabre is active
     // (beam sabre gets LMB priority when active)
@@ -218,11 +227,11 @@ fn weapon_fire_system(
 
 // ── Reload ────────────────────────────────────────────────────────────────────
 fn weapon_reload_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:       Res<GameInput>,
     mut player_q: Query<&mut WeaponInventory, With<Player>>,
     mut reload_ev: EventWriter<WeaponReloadedEvent>,
 ) {
-    if keyboard.just_pressed(KeyCode::KeyR) {
+    if gi.reload {
         if let Ok(mut inv) = player_q.get_single_mut() {
             inv.active_mut().reload();
             reload_ev.send(WeaponReloadedEvent);
@@ -232,6 +241,7 @@ fn weapon_reload_system(
 
 // ── Special Weapons (7/8/9/0) ────────────────────────────────────────────────
 fn special_weapon_system(
+    gi:       Res<GameInput>,
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut commands: Commands,
@@ -518,7 +528,7 @@ const HEAVY_COMBO: &[(&str, f32, f32, f32)] = &[
 ];
 
 fn melee_combo_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut commands: Commands,
     proj_assets: Res<ProjectileAssets>,
@@ -538,8 +548,8 @@ fn melee_combo_system(
     combo.heavy_timer = (combo.heavy_timer - dt).max(0.0);
     combo.active_timer = (combo.active_timer - dt).max(0.0);
 
-    if keyboard.just_pressed(KeyCode::KeyV) { combo.buffered_light = true; }
-    if keyboard.just_pressed(KeyCode::KeyB) { combo.buffered_heavy = true; }
+    if gi.melee_light { combo.buffered_light = true; }
+    if gi.melee_heavy { combo.buffered_heavy = true; }
 
     if combo.light_timer <= 0.0 { combo.light_index = 0; }
     if combo.heavy_timer <= 0.0 { combo.heavy_index = 0; }
@@ -656,8 +666,7 @@ fn execute_melee_hit(
 
 // ── Beam Sabre ────────────────────────────────────────────────────────────────
 fn beam_sabre_update_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    gi:   Res<GameInput>,
     time: Res<Time>,
     mut commands: Commands,
     proj_assets: Res<ProjectileAssets>,
@@ -671,11 +680,11 @@ fn beam_sabre_update_system(
     let Ok((mut sabre, mut sm)) = player_q.get_single_mut() else { return };
     let Ok(cam) = cam_q.get_single() else { return };
 
-    // Toggle on T press
-    if keyboard.just_pressed(KeyCode::KeyT) {
+    // Toggle sabre — T key or Mode button (Xbox Guide / PS Home)
+    if gi.sabre_toggle {
         if !sabre.unlocked { return; }
         sabre.active = !sabre.active;
-        return; // Don't attack the same frame we toggle
+        return;
     }
 
     if !sabre.unlocked { return; }
@@ -705,8 +714,8 @@ fn beam_sabre_update_system(
         return;
     }
 
-    // Begin new slash sequence on LMB
-    if mouse.just_pressed(MouseButton::Left) && sabre.cooldown_timer <= 0.0 {
+    // Begin new slash sequence on fire input
+    if gi.fire_just && sabre.cooldown_timer <= 0.0 {
         sabre.is_slashing = true;
         sabre.slash_index = 0;
         sabre.cooldown_timer = sabre.cooldown;
